@@ -12,7 +12,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-cream">
       <header className="bg-ink text-white px-5 py-3 flex items-center justify-between">
-        <span className="font-bold">Bom Sabor — Admin</span>
+        <span className="font-bold flex items-center gap-2">
+          <img
+            src="https://aghojttgeyvxwnvdjevt.supabase.co/storage/v1/object/public/fotos/logo.jpg"
+            alt="Bom Sabor"
+            className="w-7 h-7 rounded-full object-cover ring-1 ring-white/20"
+          />
+          Bom Sabor — Admin
+        </span>
         <nav className="flex gap-4 text-sm items-center">
           <Link href="/admin/pedidos" className="opacity-80 hover:opacity-100">Pedidos</Link>
           <Link href="/admin/estoque" className="opacity-80 hover:opacity-100">Cardápio do dia</Link>

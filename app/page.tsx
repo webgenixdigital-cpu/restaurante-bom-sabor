@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CategoriaId, ItemEstoque, MarmitaConfig } from '@/lib/types';
+import Capa from '@/components/Capa';
+import RodapeGenix from '@/components/RodapeGenix';
 
 const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra'];
 const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
@@ -160,10 +162,12 @@ export default function CardapioPage() {
   }
 
   return (
-    <main className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-green-dark mb-6 text-center">Monte sua marmita — Bom Sabor</h1>
+    <>
+      <Capa />
+      <main className="max-w-lg mx-auto px-4 pb-8 pt-16 sm:pt-20">
+        <h1 className="text-2xl font-bold text-green-dark mb-6 text-center">Bom Sabor</h1>
 
-      <div className="bg-white rounded-2xl shadow p-5">
+        <div className="bg-white rounded-2xl shadow p-5">
 
         {etapa === 'nome' && (
           <Step titulo="Qual é o seu nome?">
@@ -290,7 +294,9 @@ export default function CardapioPage() {
         )}
       </div>
 
-    </main>
+      <RodapeGenix />
+      </main>
+    </>
   );
 }
 
