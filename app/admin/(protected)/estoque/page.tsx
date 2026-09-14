@@ -59,8 +59,8 @@ export default function EstoquePage() {
           <b>Lembrete:</b> essa alteração ainda não é replicada automaticamente no iFood.
           Depois de ajustar aqui, atualize também por lá.
         </p>
-        
-<a          href="https://portal.ifood.com.br/"
+        <a
+          href="https://portal.ifood.com.br/"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl whitespace-nowrap flex-shrink-0"
