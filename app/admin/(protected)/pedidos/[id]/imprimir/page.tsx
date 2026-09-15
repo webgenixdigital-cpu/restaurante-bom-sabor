@@ -16,7 +16,8 @@ export default async function ImprimirPedido({ params }: { params: { id: string 
       salada:salada_id ( nome ),
       carne:carne_id ( nome ),
       extra:extra_id ( nome, preco ),
-      pedido_marmita_guarnicoes ( item_id, itens_estoque ( nome ) )
+      pedido_marmita_guarnicoes ( item_id, itens_estoque ( nome ) ),
+      pedido_marmita_extra_carnes ( quantidade, itens_estoque ( nome ) )
     `)
     .eq('pedido_id', params.id)
     .order('numero');

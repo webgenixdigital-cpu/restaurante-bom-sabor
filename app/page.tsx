@@ -2,29 +2,28 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { CategoriaId, ItemEstoque, MarmitaConfig } from '@/lib/types';
+import type { CategoriaId, ItemEstoque, MarmitaConfig, ExtraCarneEscolha } from '@/lib/types';
 import Capa from '@/components/Capa';
 import RodapeGenix from '@/components/RodapeGenix';
 
 const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra'];
 const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
   tamanho: 'Escolha o tamanho', arroz: 'Escolha o arroz', feijao: 'Escolha o feijão',
-  guarnicao: 'Escolha as guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
+  guarnicao: 'Escolha até 3 guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
   extra: 'Deseja adicionar carne extra?',
 };
-const OBRIGATORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne']; // extra é opcional
+const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
 
 type Etapa =
   | 'nome' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
-  | CategoriaId | 'pagamento' | 'resumo';
+  | CategoriaId | 'extraCarnes' | 'pagamento' | 'resumo';
 
 export default function CardapioPage() {
   const supabase = useMemo(() => createClient(), []);
   const [itensPorCategoria, setItensPorCategoria] = useState<Record<string, ItemEstoque[]>>({});
   const [carregando, setCarregando] = useState(true);
 
-  // estado do pedido
   const [nome, setNome] = useState('');
   const [modo, setModo] = useState<'retirada' | 'entrega' | null>(null);
   const [endereco, setEndereco] = useState('');
@@ -33,8 +32,8 @@ export default function CardapioPage() {
   const [pagamento, setPagamento] = useState<string | null>(null);
 
   const [atual, setAtual] = useState<Partial<Record<CategoriaId, ItemEstoque | ItemEstoque[]>>>({});
+  const [extraQuantidades, setExtraQuantidades] = useState<Record<string, number>>({});
   const [marmitas, setMarmitas] = useState<MarmitaConfig[]>([]);
-  const [indiceItem, setIndiceItem] = useState(0);
 
   const [etapa, setEtapa] = useState<Etapa>('nome');
   const [enviando, setEnviando] = useState(false);
@@ -83,27 +82,58 @@ export default function CardapioPage() {
   }
 
   function podeAvancar(cat: CategoriaId): boolean {
-    if (cat === 'extra') return true; // opcional
-    if (cat === 'guarnicao') return ((atual.guarnicao as ItemEstoque[]) || []).length === QTD_GUARNICOES;
+    if (cat === 'extra') return true;
+    if (cat === 'guarnicao') return true;
     return !!atual[cat];
   }
 
+  function pularEtapa(cat: CategoriaId) {
+    setAtual((prev) => ({ ...prev, [cat]: undefined }));
+    setEtapa(proximaCategoria(cat));
+  }
+
+  function ajustarQtdExtra(carneId: string, delta: number) {
+    setExtraQuantidades((prev) => {
+      const atualQtd = prev[carneId] || 0;
+      const nova = Math.max(0, Math.min(20, atualQtd + delta));
+      const copia = { ...prev, [carneId]: nova };
+      if (nova === 0) delete copia[carneId];
+      return copia;
+    });
+  }
+
+  function totalUnidadesExtra() {
+    return Object.values(extraQuantidades).reduce((s, q) => s + q, 0);
+  }
+
   function finalizarMarmitaAtual() {
+    const tipoExtra = atual.extra as ItemEstoque | undefined;
+    const carnesDisponiveis = itensPorCategoria.carne || [];
+    const escolhasExtra: ExtraCarneEscolha[] = Object.entries(extraQuantidades)
+      .map(([carneId, quantidade]) => ({
+        carne: carnesDisponiveis.find((c) => c.id === carneId)!,
+        quantidade,
+      }))
+      .filter((e) => e.carne && e.quantidade > 0);
+
     const config: MarmitaConfig = {
       numero: marmitas.length + 1,
       tamanho: atual.tamanho as ItemEstoque,
-      arroz: atual.arroz as ItemEstoque,
-      feijao: atual.feijao as ItemEstoque,
+      arroz: (atual.arroz as ItemEstoque) || null,
+      feijao: (atual.feijao as ItemEstoque) || null,
       guarnicoes: (atual.guarnicao as ItemEstoque[]) || [],
-      salada: atual.salada as ItemEstoque,
-      carne: atual.carne as ItemEstoque,
-      extra: (atual.extra as ItemEstoque) || null,
+      salada: (atual.salada as ItemEstoque) || null,
+      carne: (atual.carne as ItemEstoque) || null,
+      extra: tipoExtra && tipoExtra.preco > 0 && escolhasExtra.length > 0
+        ? { tipo: tipoExtra, escolhas: escolhasExtra }
+        : null,
     };
     const novasMarmitas = [...marmitas, config];
     setMarmitas(novasMarmitas);
 
     if (modoMarmitas === 'diferentes' && novasMarmitas.length < quantidade) {
       setAtual({});
+      setExtraQuantidades({});
       setEtapa('tamanho');
     } else {
       if (modoMarmitas === 'igual') {
@@ -115,9 +145,28 @@ export default function CardapioPage() {
   }
 
   const total = useMemo(
-    () => marmitas.reduce((soma, m) => soma + m.tamanho.preco + (m.extra?.preco || 0), 0),
+    () => marmitas.reduce((soma, m) => {
+      const precoExtra = m.extra ? m.extra.tipo.preco * m.extra.escolhas.reduce((s, e) => s + e.quantidade, 0) : 0;
+      return soma + m.tamanho.preco + precoExtra;
+    }, 0),
     [marmitas]
   );
+
+  function descreverMarmita(m: MarmitaConfig): string {
+    const partes = [
+      m.arroz?.nome,
+      m.feijao?.nome,
+      m.guarnicoes.length ? m.guarnicoes.map((g) => g.nome).join(' / ') : null,
+      m.salada?.nome,
+      m.carne?.nome,
+    ].filter(Boolean);
+    let txt = partes.length ? partes.join(', ') : 'sem acompanhamentos escolhidos';
+    if (m.extra) {
+      const extraTxt = m.extra.escolhas.map((e) => `${e.quantidade}x ${e.carne.nome}`).join(', ');
+      txt += ` + ${m.extra.tipo.nome}: ${extraTxt}`;
+    }
+    return txt;
+  }
 
   async function enviarPedido() {
     setEnviando(true);
@@ -137,10 +186,21 @@ export default function CardapioPage() {
       const data = await resp.json();
       if (data.codigo) {
         setCodigoPedido(data.codigo);
-        // abre o WhatsApp também, como canal extra de confirmação
         const numero = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+        const linhasMarmitas = modoMarmitas === 'diferentes'
+          ? marmitas.map((m) => `*Marmita ${m.numero} — ${m.tamanho.nome}*\n${descreverMarmita(m)}`).join('\n\n')
+          : marmitas[0]
+            ? `*${marmitas[0].tamanho.nome} × ${quantidade}*\n${descreverMarmita(marmitas[0])}`
+            : '';
         const texto = encodeURIComponent(
-          `*Pedido #${data.codigo} — Bom Sabor* 🍱\n\n*Nome:* ${nome}\n*Modo:* ${modo}\n*Total:* R$ ${total.toFixed(2)}\n\nJá enviado pelo site — só confirmando por aqui!`
+          `*Pedido #${data.codigo} — Bom Sabor* 🍱\n\n` +
+          `*Nome:* ${nome}\n` +
+          `*Modo:* ${modo === 'entrega' ? `Entrega — ${endereco}` : 'Retirada'}\n` +
+          `*Quantidade:* ${quantidade} marmita(s)\n` +
+          `*Pagamento:* ${pagamento}\n\n` +
+          `${linhasMarmitas}\n\n` +
+          `*Total: R$ ${total.toFixed(2)}*\n\n` +
+          `Já enviado pelo site — só confirmando por aqui!`
         );
         window.open(`https://wa.me/${numero}?text=${texto}`, '_blank');
       }
@@ -171,6 +231,11 @@ export default function CardapioPage() {
 
         {etapa === 'nome' && (
           <Step titulo="Qual é o seu nome?">
+            <div className="bg-cream-2 rounded-xl p-3 mb-4 text-xs text-ink/70 leading-relaxed">
+              💡 <b>Como funciona:</b> monte sua marmita passo a passo — tamanho, arroz, feijão,
+              guarnições, salada e carne. Se não quiser escolher algo em alguma etapa, é só usar
+              "Pular etapa". No final você vê o resumo completo antes de confirmar.
+            </div>
             <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
             <Botoes onNext={() => setEtapa('modo')} disabled={nome.trim().length < 2} />
           </Step>
@@ -239,15 +304,59 @@ export default function CardapioPage() {
                 onSelect={(i) => (isMulti ? alternarMulti(cat, i) : selecionarUnica(cat, i))}
                 mostrarPreco={cat === 'tamanho' || cat === 'extra'}
               />
-              {isMulti && <p className="text-xs font-bold text-orange-dark mt-2">{((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas</p>}
+              {isMulti && <p className="text-xs font-bold text-orange-dark mt-2">{((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas (não é obrigatório escolher todas)</p>}
               <Botoes
                 onBack={() => {
                   const idx = ORDEM_CATEGORIAS.indexOf(cat);
                   if (idx === 0) setEtapa(quantidade > 1 ? 'modoMarmitas' : 'quantidade');
                   else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
                 }}
-                onNext={() => (cat === 'extra' ? finalizarMarmitaAtual() : setEtapa(proximaCategoria(cat)))}
+                onSkip={PULAVEL[cat] ? () => pularEtapa(cat) : undefined}
+                onNext={() => {
+                  if (cat !== 'extra') { setEtapa(proximaCategoria(cat)); return; }
+                  const sel = atual.extra as ItemEstoque | undefined;
+                  if (sel && sel.preco > 0) setEtapa('extraCarnes');
+                  else finalizarMarmitaAtual();
+                }}
                 disabled={!podeAvancar(cat)}
+              />
+            </Step>
+          );
+        })()}
+
+        {etapa === 'extraCarnes' && (() => {
+          const tipoExtra = atual.extra as ItemEstoque;
+          const carnes = itensPorCategoria.carne || [];
+          return (
+            <Step titulo={`Quais carnes? (${tipoExtra?.nome})`}>
+              <p className="text-xs text-ink/60 mb-3">
+                Cada unidade sai por {tipoExtra ? `R$ ${tipoExtra.preco.toFixed(2)}` : ''}. Escolha uma ou mais carnes e a quantidade de cada.
+              </p>
+              <div className="flex flex-col gap-2">
+                {carnes.map((c) => {
+                  const qtd = extraQuantidades[c.id] || 0;
+                  return (
+                    <div key={c.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-cream">
+                      <span className="font-semibold text-sm">{c.emoji} {c.nome}</span>
+                      <div className="flex items-center gap-3">
+                        <button className="qtybtn-sm" onClick={() => ajustarQtdExtra(c.id, -1)}>−</button>
+                        <span className="w-5 text-center font-bold">{qtd}</span>
+                        <button className="qtybtn-sm" onClick={() => ajustarQtdExtra(c.id, 1)}>+</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {totalUnidadesExtra() > 0 && tipoExtra && (
+                <p className="text-sm font-bold text-green-dark mt-3 text-right">
+                  Subtotal extra: R$ {(tipoExtra.preco * totalUnidadesExtra()).toFixed(2)}
+                </p>
+              )}
+              <Botoes
+                onBack={() => setEtapa('extra')}
+                onSkip={() => { setExtraQuantidades({}); finalizarMarmitaAtual(); }}
+                onNext={finalizarMarmitaAtual}
+                disabled={totalUnidadesExtra() === 0}
               />
             </Step>
           );
@@ -262,10 +371,10 @@ export default function CardapioPage() {
             />
             {pagamento === 'pix' && (
               <div className="bg-cream-2 rounded-xl p-3 mt-3 text-sm">
-                <div className="font-bold mb-1">Chave Pix (celular)</div>
+                <div className="font-bold mb-1">Chave Pix (CNPJ) — Gabriel e Danziger e Cia Ltda</div>
                 <div className="flex gap-2">
-                  <input className="input flex-1" readOnly value="35987096476" />
-                  <button className="bg-green text-white rounded-lg px-3 font-bold" onClick={() => navigator.clipboard.writeText('35987096476')}>Copiar</button>
+                  <input className="input flex-1" readOnly value="86449840000151" />
+                  <button className="bg-green text-white rounded-lg px-3 font-bold" onClick={() => navigator.clipboard.writeText('86449840000151')}>Copiar</button>
                 </div>
               </div>
             )}
@@ -282,6 +391,23 @@ export default function CardapioPage() {
               <SummaryLine k="Quantidade" v={`${quantidade} marmita(s)`} />
               <SummaryLine k="Pagamento" v={pagamento || ''} />
             </div>
+
+            <div className="bg-cream rounded-xl p-3 mb-4 space-y-3">
+              {modoMarmitas === 'diferentes'
+                ? marmitas.map((m) => (
+                    <div key={m.numero} className="text-sm">
+                      <div className="font-bold text-green-dark">Marmita {m.numero} — {m.tamanho.nome}</div>
+                      <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(m)}</div>
+                    </div>
+                  ))
+                : marmitas[0] && (
+                    <div className="text-sm">
+                      <div className="font-bold text-green-dark">{marmitas[0].tamanho.nome} × {quantidade}</div>
+                      <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(marmitas[0])}</div>
+                    </div>
+                  )}
+            </div>
+
             <div className="flex justify-between items-center border-t-2 border-ink pt-3 mb-4">
               <span className="font-bold">Total</span>
               <span className="text-2xl font-extrabold text-green-dark">R$ {total.toFixed(2)}</span>
@@ -332,18 +458,25 @@ function Opcoes({
 }
 
 function Botoes({
-  onBack, onNext, onNextExtra, disabled,
-}: { onBack?: () => void; onNext: () => void; onNextExtra?: () => void; disabled?: boolean }) {
+  onBack, onNext, onNextExtra, onSkip, disabled,
+}: { onBack?: () => void; onNext: () => void; onNextExtra?: () => void; onSkip?: () => void; disabled?: boolean }) {
   return (
-    <div className="flex gap-2 mt-5">
-      {onBack && <button onClick={onBack} className="px-4 py-3 rounded-xl border font-bold text-sm">Voltar</button>}
-      <button
-        onClick={() => { onNextExtra?.(); onNext(); }}
-        disabled={disabled}
-        className="flex-1 bg-orange text-white font-bold py-3 rounded-xl disabled:opacity-40"
-      >
-        Continuar
-      </button>
+    <div className="flex flex-col gap-2 mt-5">
+      <div className="flex gap-2">
+        {onBack && <button onClick={onBack} className="px-4 py-3 rounded-xl border font-bold text-sm">Voltar</button>}
+        <button
+          onClick={() => { onNextExtra?.(); onNext(); }}
+          disabled={disabled}
+          className="flex-1 bg-orange text-white font-bold py-3 rounded-xl disabled:opacity-40"
+        >
+          Continuar
+        </button>
+      </div>
+      {onSkip && (
+        <button onClick={onSkip} className="text-xs text-ink/40 underline hover:text-ink/70 self-center">
+          Pular etapa
+        </button>
+      )}
     </div>
   );
 }

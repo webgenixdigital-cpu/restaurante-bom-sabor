@@ -21,15 +21,25 @@ export interface ItemDisponivel extends ItemEstoque {
   disponivel: boolean;
 }
 
+export interface ExtraCarneEscolha {
+  carne: ItemEstoque;
+  quantidade: number;
+}
+
+export interface ExtraConfig {
+  tipo: ItemEstoque; // "Carne extra" ou "Carne extra à parmegiana"
+  escolhas: ExtraCarneEscolha[];
+}
+
 export interface MarmitaConfig {
   numero: number;
   tamanho: ItemEstoque;
-  arroz: ItemEstoque;
-  feijao: ItemEstoque;
+  arroz: ItemEstoque | null;
+  feijao: ItemEstoque | null;
   guarnicoes: ItemEstoque[];
-  salada: ItemEstoque;
-  carne: ItemEstoque;
-  extra: ItemEstoque | null;
+  salada: ItemEstoque | null;
+  carne: ItemEstoque | null;
+  extra: ExtraConfig | null;
 }
 
 export interface NovoPedidoPayload {

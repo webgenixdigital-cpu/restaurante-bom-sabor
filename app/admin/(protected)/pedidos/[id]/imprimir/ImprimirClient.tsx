@@ -29,12 +29,21 @@ export default function ImprimirClient({ pedido, marmitas }: { pedido: any; marm
       {marmitas.map((m: any) => (
         <div key={m.numero} className="mb-2">
           <div className="font-bold">Marmita {m.numero} — {m.tamanho?.nome}</div>
-          <div>Arroz: {m.arroz?.nome}</div>
-          <div>Feijão: {m.feijao?.nome}</div>
-          <div>Guarn.: {m.pedido_marmita_guarnicoes?.map((g: any) => g.itens_estoque?.nome).join(', ')}</div>
-          <div>Salada: {m.salada?.nome}</div>
-          <div>Carne: {m.carne?.nome}</div>
-          {m.extra?.nome && m.extra.nome !== 'Sem carne extra' && <div>+ {m.extra.nome}</div>}
+          {m.arroz?.nome && <div>Arroz: {m.arroz.nome}</div>}
+          {m.feijao?.nome && <div>Feijão: {m.feijao.nome}</div>}
+          {m.pedido_marmita_guarnicoes?.length > 0 && (
+            <div>Guarn.: {m.pedido_marmita_guarnicoes.map((g: any) => g.itens_estoque?.nome).join(', ')}</div>
+          )}
+          {m.salada?.nome && <div>Salada: {m.salada.nome}</div>}
+          {m.carne?.nome && <div>Carne: {m.carne.nome}</div>}
+          {m.extra?.nome && m.pedido_marmita_extra_carnes?.length > 0 && (
+            <div>
+              + {m.extra.nome}:
+              {m.pedido_marmita_extra_carnes.map((e: any, i: number) => (
+                <span key={i}> {e.quantidade}x {e.itens_estoque?.nome}{i < m.pedido_marmita_extra_carnes.length - 1 ? ',' : ''}</span>
+              ))}
+            </div>
+          )}
         </div>
       ))}
 

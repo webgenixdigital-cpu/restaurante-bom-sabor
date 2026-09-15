@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { NovoPedidoPayload } from '@/lib/types';
 
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = createAdminClient();
   const body: NovoPedidoPayload = await req.json();
 
   if (!body.nome_cliente || !body.modo || !body.marmitas?.length) {
@@ -28,19 +28,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: erroPedido?.message || 'Erro ao criar pedido' }, { status: 500 });
   }
 
-  // 2. cria cada marmita + suas guarnições
+  // 2. cria cada marmita + suas guarnições + carnes extras
   for (const marmita of body.marmitas) {
     const { data: marmitaSalva, error: erroMarmita } = await supabase
       .from('pedido_marmitas')
       .insert({
         pedido_id: pedido.id,
         numero: marmita.numero,
-        tamanho_id: marmita.tamanho.id,
-        arroz_id: marmita.arroz.id,
-        feijao_id: marmita.feijao.id,
-        salada_id: marmita.salada.id,
-        carne_id: marmita.carne.id,
-        extra_id: marmita.extra?.id || null,
+        tamanho_id: marmita.tamanho?.id || null,
+        arroz_id: marmita.arroz?.id || null,
+        feijao_id: marmita.feijao?.id || null,
+        salada_id: marmita.salada?.id || null,
+        carne_id: marmita.carne?.id || null,
+        extra_id: marmita.extra?.tipo?.id || null,
       })
       .select()
       .single();
@@ -50,6 +50,16 @@ export async function POST(req: Request) {
     if (marmita.guarnicoes?.length) {
       await supabase.from('pedido_marmita_guarnicoes').insert(
         marmita.guarnicoes.map((g) => ({ pedido_marmita_id: marmitaSalva.id, item_id: g.id }))
+      );
+    }
+
+    if (marmita.extra?.escolhas?.length) {
+      await supabase.from('pedido_marmita_extra_carnes').insert(
+        marmita.extra.escolhas.map((e) => ({
+          pedido_marmita_id: marmitaSalva.id,
+          carne_id: e.carne.id,
+          quantidade: e.quantidade,
+        }))
       );
     }
   }
