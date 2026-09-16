@@ -147,7 +147,8 @@ export default function CardapioPage() {
   const total = useMemo(
     () => marmitas.reduce((soma, m) => {
       const precoExtra = m.extra ? m.extra.tipo.preco * m.extra.escolhas.reduce((s, e) => s + e.quantidade, 0) : 0;
-      return soma + m.tamanho.preco + precoExtra;
+      const precoCarne = m.carne?.preco || 0;
+      return soma + m.tamanho.preco + precoCarne + precoExtra;
     }, 0),
     [marmitas]
   );
@@ -199,7 +200,8 @@ export default function CardapioPage() {
           `*Quantidade:* ${quantidade} marmita(s)\n` +
           `*Pagamento:* ${pagamento}\n\n` +
           `${linhasMarmitas}\n\n` +
-          `*Total: R$ ${total.toFixed(2)}*\n\n` +
+          `*Total: R$ ${total.toFixed(2)}*\n` +
+          (modo === 'entrega' ? `_Obs.: total não inclui a taxa de entrega, que varia conforme a localidade e será confirmada por aqui._\n\n` : `\n`) +
           `Já enviado pelo site — só confirmando por aqui!`
         );
         window.open(`https://wa.me/${numero}?text=${texto}`, '_blank');
@@ -235,6 +237,13 @@ export default function CardapioPage() {
               💡 <b>Como funciona:</b> monte sua marmita passo a passo — tamanho, arroz, feijão,
               guarnições, salada e carne. Se não quiser escolher algo em alguma etapa, é só usar
               "Pular etapa". No final você vê o resumo completo antes de confirmar.
+              <br /><br />
+              🌱 Itens com essa folhinha são opções vegetarianas (sem carne).
+            </div>
+            <div className="bg-orange/10 border border-orange/20 rounded-xl p-3 mb-4 text-xs text-ink/70 leading-relaxed">
+              📌 <b>Bom saber:</b> pedir os itens da marmita separados em potes individuais tem
+              acréscimo a partir de R$ 2,00 (valor da embalagem). Temos também marmitex só de
+              massa, com valor diferenciado — consulte pelo WhatsApp.
             </div>
             <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
             <Botoes onNext={() => setEtapa('modo')} disabled={nome.trim().length < 2} />
@@ -257,6 +266,7 @@ export default function CardapioPage() {
             <input className="input" value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua, número, bairro" />
             <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mt-3">
               🛵 A taxa de entrega varia conforme a localidade e será somada ao total, confirmada pelo WhatsApp.
+              Aos domingos e feriados a entrega é terceirizada e o valor pode ser diferente — também confirmado por lá.
             </p>
             <Botoes onBack={() => setEtapa('modo')} onNext={() => setEtapa('quantidade')} disabled={endereco.trim().length < 5} />
           </Step>
@@ -302,7 +312,7 @@ export default function CardapioPage() {
                 itens={itens}
                 selecionado={isMulti ? ((atual.guarnicao as ItemEstoque[]) || []) : (atual[cat] ? [atual[cat] as ItemEstoque] : [])}
                 onSelect={(i) => (isMulti ? alternarMulti(cat, i) : selecionarUnica(cat, i))}
-                mostrarPreco={cat === 'tamanho' || cat === 'extra'}
+                mostrarPreco={cat === 'tamanho' || cat === 'extra' || cat === 'carne'}
               />
               {isMulti && <p className="text-xs font-bold text-orange-dark mt-2">{((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas (não é obrigatório escolher todas)</p>}
               <Botoes
@@ -412,6 +422,11 @@ export default function CardapioPage() {
               <span className="font-bold">Total</span>
               <span className="text-2xl font-extrabold text-green-dark">R$ {total.toFixed(2)}</span>
             </div>
+            {modo === 'entrega' && (
+              <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mb-4">
+                🛵 Este total ainda não inclui a taxa de entrega — ela varia conforme a localidade e será confirmada pelo WhatsApp antes da preparação.
+              </p>
+            )}
             <button disabled={enviando} onClick={enviarPedido} className="w-full bg-green text-white font-bold py-3 rounded-xl disabled:opacity-50">
               {enviando ? 'Enviando…' : 'Confirmar pedido ✅'}
             </button>
@@ -448,7 +463,10 @@ function Opcoes({
             onClick={() => onSelect(item)}
             className={`flex justify-between items-center px-4 py-3 rounded-xl border-2 text-left ${ativo ? 'border-green bg-cream-2' : 'border-transparent bg-cream'}`}
           >
-            <span className="font-semibold text-sm">{(item as any).emoji} {item.nome}</span>
+            <span className="font-semibold text-sm flex items-center gap-1.5">
+              {(item as any).emoji} {item.nome}
+              {item.vegetariano && <span title="Vegetariano">🌱</span>}
+            </span>
             {mostrarPreco && item.preco > 0 && <span className="text-green-dark font-bold text-sm">R$ {item.preco.toFixed(2)}</span>}
           </button>
         );

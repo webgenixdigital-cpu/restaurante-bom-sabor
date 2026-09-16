@@ -20,9 +20,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           />
           Bom Sabor — Admin
         </span>
-        <nav className="flex gap-4 text-sm items-center">
-          <Link href="/admin/pedidos" className="opacity-80 hover:opacity-100">Pedidos</Link>
-          <Link href="/admin/estoque" className="opacity-80 hover:opacity-100">Cardápio do dia</Link>
+        <nav className="flex gap-3 text-sm items-center">
+          <Link
+            href="/admin/pedidos"
+            className="bg-white/10 hover:bg-white/20 font-semibold px-3 py-1.5 rounded-lg transition"
+          >
+            Pedidos
+          </Link>
+          <Link
+            href="/admin/estoque"
+            className="bg-white/10 hover:bg-white/20 font-semibold px-3 py-1.5 rounded-lg transition"
+          >
+            Cardápio do dia
+          </Link>
           <a
             href="https://portal.ifood.com.br/"
             target="_blank"
@@ -31,6 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           >
             🛵 Abrir iFood
           </a>
+          <span className="w-px h-6 bg-white/15" />
           <LogoutButton />
         </nav>
       </header>

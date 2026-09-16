@@ -8,6 +8,7 @@ export interface ItemEstoque {
   preco: number;
   ativo_cadastro: boolean;
   ordem: number;
+  vegetariano: boolean;
 }
 
 export interface DisponibilidadeDia {
