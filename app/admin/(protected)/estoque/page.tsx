@@ -63,9 +63,13 @@ export default function EstoquePage() {
     setPrecosEditando((prev) => { const c = { ...prev }; delete c[item.id]; return c; });
   }
 
-  const porCategoria = useMemo(() => {
+      const porCategoria = useMemo(() => {
     const agrupado: Record<string, ItemEstoque[]> = {};
     itens.forEach((i) => { agrupado[i.categoria_id] = agrupado[i.categoria_id] || []; agrupado[i.categoria_id].push(i); });
+    // ordem alfabética em tudo, exceto tamanho (mantém a ordem crescente de porte/preço)
+    Object.keys(agrupado).forEach((cat) => {
+      if (cat !== 'tamanho') agrupado[cat].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    });
     return agrupado;
   }, [itens]);
 
@@ -96,15 +100,20 @@ export default function EstoquePage() {
         (essencial pras Massas e Congelados, que não têm preço embutido em um "tamanho").
       </div>
 
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-5 text-sm text-blue-800">
+        📏 Os <b>Tamanhos</b> ficam sempre disponíveis no cardápio — não precisam ser ativados dia a dia. Só o preço é editável.
+      </div>
+
       {ORDEM.map((cat) => {
         const itensCategoria = porCategoria[cat] || [];
         if (itensCategoria.length === 0) return null;
+        const semAtivacaoDiaria = cat === 'tamanho';
         return (
           <div key={cat} className="bg-white rounded-2xl shadow p-4 mb-4">
             <h2 className="font-bold text-sm text-orange-dark mb-3 uppercase tracking-wide">{NOMES[cat]}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {itensCategoria.map((item) => {
-                const ativo = disponiveis[item.id];
+                const ativo = semAtivacaoDiaria ? true : disponiveis[item.id];
                 const precoEditando = precosEditando[item.id];
                 return (
                   <div
@@ -113,13 +122,20 @@ export default function EstoquePage() {
                       ativo ? 'border-green bg-cream-2 text-ink' : 'border-ink/10 bg-ink/5 text-ink/40'
                     }`}
                   >
-                    <button
-                      onClick={() => alternar(item)}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-left"
-                    >
-                      <span className="font-semibold pr-5">{item.emoji} {item.nome}</span>
-                      <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ml-2 ${ativo ? 'bg-green border-green' : 'border-ink/20'}`} />
-                    </button>
+                    {semAtivacaoDiaria ? (
+                      <div className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                        <span className="font-semibold pr-5">{item.emoji} {item.nome}</span>
+                        <span className="text-[10px] font-bold text-green-dark uppercase whitespace-nowrap">Sempre ativo</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => alternar(item)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+                      >
+                        <span className="font-semibold pr-5">{item.emoji} {item.nome}</span>
+                        <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ml-2 ${ativo ? 'bg-green border-green' : 'border-ink/20'}`} />
+                      </button>
+                    )}
 
                     <div className="flex items-center gap-1 px-3 pb-2 -mt-1" onClick={(e) => e.stopPropagation()}>
                       <span className="text-xs">R$</span>
