@@ -63,7 +63,7 @@ export default function EstoquePage() {
     setPrecosEditando((prev) => { const c = { ...prev }; delete c[item.id]; return c; });
   }
 
-      const porCategoria = useMemo(() => {
+  const porCategoria = useMemo(() => {
     const agrupado: Record<string, ItemEstoque[]> = {};
     itens.forEach((i) => { agrupado[i.categoria_id] = agrupado[i.categoria_id] || []; agrupado[i.categoria_id].push(i); });
     // ordem alfabética em tudo, exceto tamanho (mantém a ordem crescente de porte/preço)
@@ -124,7 +124,7 @@ export default function EstoquePage() {
                   >
                     {semAtivacaoDiaria ? (
                       <div className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                        <span className="font-semibold pr-5">{item.emoji} {item.nome}</span>
+                        <span className="font-semibold pl-4">{item.emoji} {item.nome}</span>
                         <span className="text-[10px] font-bold text-green-dark uppercase whitespace-nowrap">Sempre ativo</span>
                       </div>
                     ) : (
@@ -132,7 +132,7 @@ export default function EstoquePage() {
                         onClick={() => alternar(item)}
                         className="w-full flex items-center justify-between px-3 py-2.5 text-left"
                       >
-                        <span className="font-semibold pr-5">{item.emoji} {item.nome}</span>
+                        <span className="font-semibold pl-4">{item.emoji} {item.nome}</span>
                         <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ml-2 ${ativo ? 'bg-green border-green' : 'border-ink/20'}`} />
                       </button>
                     )}
@@ -153,7 +153,7 @@ export default function EstoquePage() {
                     <span
                       onClick={() => alternarVegetariano(item)}
                       title="Marcar como vegetariano"
-                      className={`absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow cursor-pointer ${
+                      className={`absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow cursor-pointer ${
                         item.vegetariano ? 'bg-green text-white' : 'bg-white text-ink/30 border border-ink/10'
                       }`}
                     >
