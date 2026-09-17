@@ -22,7 +22,12 @@ export default async function ImprimirPedido({ params }: { params: { id: string 
     .eq('pedido_id', params.id)
     .order('numero');
 
+  const { data: itensAvulsos } = await supabase
+    .from('pedido_itens_avulsos')
+    .select(`quantidade, itens_estoque ( nome, preco )`)
+    .eq('pedido_id', params.id);
+
   if (!pedido) return <div className="p-8">Pedido não encontrado.</div>;
 
-  return <ImprimirClient pedido={pedido} marmitas={marmitas || []} />;
+  return <ImprimirClient pedido={pedido} marmitas={marmitas || []} itensAvulsos={itensAvulsos || []} />;
 }

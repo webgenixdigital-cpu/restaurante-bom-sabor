@@ -1,4 +1,4 @@
-export type CategoriaId = 'tamanho' | 'arroz' | 'feijao' | 'guarnicao' | 'salada' | 'carne' | 'extra';
+export type CategoriaId = 'tamanho' | 'arroz' | 'feijao' | 'guarnicao' | 'salada' | 'carne' | 'extra' | 'massa' | 'congelados';
 
 export interface ItemEstoque {
   id: string;
@@ -43,6 +43,11 @@ export interface MarmitaConfig {
   extra: ExtraConfig | null;
 }
 
+export interface ItemAvulsoEscolha {
+  item: ItemEstoque;
+  quantidade: number;
+}
+
 export interface NovoPedidoPayload {
   nome_cliente: string;
   modo: 'retirada' | 'entrega';
@@ -51,6 +56,7 @@ export interface NovoPedidoPayload {
   total: number;
   observacoes?: string;
   marmitas: MarmitaConfig[];
+  itensAvulsos?: ItemAvulsoEscolha[];
 }
 
 export interface Pedido {

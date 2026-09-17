@@ -9,8 +9,14 @@ body {
 
 @media print {
   .no-print { display: none !important; }
-  @page { size: 80mm auto; margin: 4mm; }
-  body { font-family: 'Courier New', monospace; }
+  @page { size: 80mm auto; margin: 3mm; }
+  * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+    -webkit-font-smoothing: none;
+    text-rendering: optimizeLegibility;
+  }
 }
 
 .input { width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(43,36,28,0.15); background:#FFF8EE; }

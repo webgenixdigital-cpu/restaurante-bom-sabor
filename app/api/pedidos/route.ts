@@ -6,7 +6,10 @@ export async function POST(req: Request) {
   const supabase = createAdminClient();
   const body: NovoPedidoPayload = await req.json();
 
-  if (!body.nome_cliente || !body.modo || !body.marmitas?.length) {
+  const temMarmitas = body.marmitas?.length > 0;
+  const temAvulsos = (body.itensAvulsos?.length || 0) > 0;
+
+  if (!body.nome_cliente || !body.modo || (!temMarmitas && !temAvulsos)) {
     return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
   }
 
@@ -28,8 +31,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: erroPedido?.message || 'Erro ao criar pedido' }, { status: 500 });
   }
 
-  // 2. cria cada marmita + suas guarnições + carnes extras
-  for (const marmita of body.marmitas) {
+  // 2a. cria cada marmita + suas guarnições + carnes extras
+  for (const marmita of body.marmitas || []) {
     const { data: marmitaSalva, error: erroMarmita } = await supabase
       .from('pedido_marmitas')
       .insert({
@@ -62,6 +65,17 @@ export async function POST(req: Request) {
         }))
       );
     }
+  }
+
+  // 2b. cria os itens avulsos (massas/congelados), se houver
+  if (temAvulsos) {
+    await supabase.from('pedido_itens_avulsos').insert(
+      body.itensAvulsos!.map((e) => ({
+        pedido_id: pedido.id,
+        item_id: e.item.id,
+        quantidade: e.quantidade,
+      }))
+    );
   }
 
   return NextResponse.json({ codigo: pedido.codigo, id: pedido.id });
