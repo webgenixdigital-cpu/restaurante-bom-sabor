@@ -13,6 +13,11 @@ export default function ImprimirClient({
     });
   }, [pedido.id]);
 
+  const isEntrega = pedido.modo === 'entrega';
+  const taxaDefinida = pedido.taxa_entrega != null;
+  const subtotal = Number(pedido.total);
+  const taxa = Number(pedido.taxa_entrega || 0);
+
   return (
     <div className="max-w-xs mx-auto p-4 font-mono text-[15px] leading-snug font-semibold tracking-tight">
       <div className="text-center mb-2">
@@ -23,7 +28,7 @@ export default function ImprimirClient({
       <div className="border-t-2 border-black my-2" />
 
       <div>Cliente: {pedido.nome_cliente}</div>
-      <div>{pedido.modo === 'entrega' ? `Entrega: ${pedido.endereco}` : 'RETIRADA NO LOCAL'}</div>
+      <div>{isEntrega ? `Entrega: ${pedido.endereco}` : 'RETIRADA NO LOCAL'}</div>
       <div>Pagamento: {pedido.forma_pagamento}</div>
 
       <div className="border-t-2 border-black my-2" />
@@ -56,10 +61,28 @@ export default function ImprimirClient({
       ))}
 
       <div className="border-t-2 border-black my-2" />
-      <div className="flex justify-between font-extrabold text-lg">
-        <span>TOTAL</span>
-        <span>R$ {Number(pedido.total).toFixed(2)}</span>
-      </div>
+
+      {isEntrega ? (
+        <>
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>R$ {subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Taxa de entrega</span>
+            <span>{taxaDefinida ? `R$ ${taxa.toFixed(2)}` : 'R$ ________'}</span>
+          </div>
+          <div className="flex justify-between font-extrabold text-lg mt-1">
+            <span>TOTAL</span>
+            <span>{taxaDefinida ? `R$ ${(subtotal + taxa).toFixed(2)}` : 'R$ ________'}</span>
+          </div>
+        </>
+      ) : (
+        <div className="flex justify-between font-extrabold text-lg">
+          <span>TOTAL</span>
+          <span>R$ {subtotal.toFixed(2)}</span>
+        </div>
+      )}
 
       <div className="border-t-2 border-black my-2" />
       <div className="text-center text-sm mt-3 font-bold">Obrigado pela preferência 😉</div>

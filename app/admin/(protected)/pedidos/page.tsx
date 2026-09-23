@@ -20,6 +20,9 @@ function formatarDia(diaIso: string) {
   const [ano, mes, dia] = diaIso.split('-');
   return `${dia}/${mes}/${ano}`;
 }
+function totalComTaxa(p: Pedido) {
+  return Number(p.total) + (p.modo === 'entrega' ? Number(p.taxa_entrega || 0) : 0);
+}
 
 export default function PedidosPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -28,6 +31,7 @@ export default function PedidosPage() {
   const [expandido, setExpandido] = useState<Record<string, boolean>>({});
   const [detalhes, setDetalhes] = useState<Record<string, any[]>>({});
   const [carregandoDetalhe, setCarregandoDetalhe] = useState<Record<string, boolean>>({});
+  const [taxasEditando, setTaxasEditando] = useState<Record<string, string>>({});
 
   const hojeStr = new Date().toISOString().slice(0, 10);
 
@@ -48,6 +52,16 @@ export default function PedidosPage() {
 
   async function mudarStatus(id: string, status: Pedido['status']) {
     await supabase.from('pedidos').update({ status }).eq('id', id);
+  }
+
+  async function salvarTaxa(p: Pedido) {
+    const bruto = taxasEditando[p.id];
+    if (bruto === undefined) return;
+    const valor = bruto.trim() === '' ? null : parseFloat(bruto.replace(',', '.'));
+    if (valor !== null && (isNaN(valor) || valor < 0)) return;
+    setPedidos((prev) => prev.map((x) => (x.id === p.id ? { ...x, taxa_entrega: valor } : x)));
+    await supabase.from('pedidos').update({ taxa_entrega: valor }).eq('id', p.id);
+    setTaxasEditando((prev) => { const c = { ...prev }; delete c[p.id]; return c; });
   }
 
   async function alternarExpandir(id: string) {
@@ -78,13 +92,11 @@ export default function PedidosPage() {
   // Dashboard: sempre reflete HOJE, independente do filtro da lista abaixo
   const pedidosHoje = pedidos.filter((p) => diaDe(p.created_at) === hojeStr);
   const pedidosHojeValidos = pedidosHoje.filter((p) => p.status !== 'cancelado');
-  const faturamentoHoje = pedidosHojeValidos.reduce((s, p) => s + Number(p.total), 0);
+  const faturamentoHoje = pedidosHojeValidos.reduce((s, p) => s + totalComTaxa(p), 0);
   const entregasHoje = pedidosHojeValidos.filter((p) => p.modo === 'entrega').length;
   const retiradasHoje = pedidosHojeValidos.filter((p) => p.modo === 'retirada').length;
 
-  // Dias disponíveis pra o filtro (sempre inclui hoje, mesmo sem pedidos ainda)
   const diasDisponiveis = Array.from(new Set([hojeStr, ...pedidos.map((p) => diaDe(p.created_at))])).sort((a, b) => b.localeCompare(a));
-
   const pedidosFiltrados = diaSelecionado === 'todos' ? pedidos : pedidos.filter((p) => diaDe(p.created_at) === diaSelecionado);
 
   return (
@@ -110,7 +122,7 @@ export default function PedidosPage() {
           <div className="text-xs text-ink/50 font-semibold">Retiradas</div>
         </div>
       </div>
-      <p className="text-xs text-ink/40 -mt-4 mb-5">Faturamento não conta pedidos cancelados.</p>
+      <p className="text-xs text-ink/40 -mt-4 mb-5">Faturamento inclui as taxas de entrega lançadas e não conta pedidos cancelados.</p>
 
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-semibold text-ink/60">Filtrar por dia</span>
@@ -128,77 +140,99 @@ export default function PedidosPage() {
 
       <div className="flex flex-col gap-3">
         {pedidosFiltrados.length === 0 && <p className="text-ink/40 text-sm">Nenhum pedido neste dia.</p>}
-        {pedidosFiltrados.map((p) => (
-          <div key={p.id} className="bg-white rounded-2xl shadow p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-lg">#{p.codigo}</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_COR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
-                  {p.origem === 'ifood' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">iFood</span>}
+        {pedidosFiltrados.map((p) => {
+          const taxaEditando = taxasEditando[p.id];
+          return (
+            <div key={p.id} className="bg-white rounded-2xl shadow p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-lg">#{p.codigo}</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_COR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
+                    {p.origem === 'ifood' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">iFood</span>}
+                  </div>
+                  <div className="font-semibold">{p.nome_cliente}</div>
+                  <div className="text-sm text-ink/50">
+                    {p.modo === 'entrega' ? `Entrega — ${p.endereco}` : 'Retirada no restaurante'} · {p.forma_pagamento} · R$ {totalComTaxa(p).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-ink/40 mt-0.5">
+                    Confirmado em {new Date(p.created_at).toLocaleString('pt-BR')}
+                  </div>
                 </div>
-                <div className="font-semibold">{p.nome_cliente}</div>
-                <div className="text-sm text-ink/50">
-                  {p.modo === 'entrega' ? `Entrega — ${p.endereco}` : 'Retirada no restaurante'} · {p.forma_pagamento} · R$ {Number(p.total).toFixed(2)}
-                </div>
-                <div className="text-xs text-ink/40 mt-0.5">
-                  Confirmado em {new Date(p.created_at).toLocaleString('pt-BR')}
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <select
+                    value={p.status}
+                    onChange={(e) => mudarStatus(p.id, e.target.value as Pedido['status'])}
+                    className="text-sm border rounded-lg px-2 py-1.5"
+                  >
+                    {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <Link
+                    href={`/admin/pedidos/${p.id}/imprimir`}
+                    target="_blank"
+                    className="bg-ink text-white text-sm font-bold px-3 py-2 rounded-lg whitespace-nowrap"
+                  >
+                    🖨️ Imprimir
+                  </Link>
+                  <button
+                    onClick={() => alternarExpandir(p.id)}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-ink/10 text-ink/50 hover:bg-cream transition"
+                    title="Ver resumo do pedido"
+                  >
+                    <span className={`transition-transform ${expandido[p.id] ? 'rotate-180' : ''}`}>▾</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <select
-                  value={p.status}
-                  onChange={(e) => mudarStatus(p.id, e.target.value as Pedido['status'])}
-                  className="text-sm border rounded-lg px-2 py-1.5"
-                >
-                  {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-                <Link
-                  href={`/admin/pedidos/${p.id}/imprimir`}
-                  target="_blank"
-                  className="bg-ink text-white text-sm font-bold px-3 py-2 rounded-lg whitespace-nowrap"
-                >
-                  🖨️ Imprimir
-                </Link>
-                <button
-                  onClick={() => alternarExpandir(p.id)}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-ink/10 text-ink/50 hover:bg-cream transition"
-                  title="Ver resumo do pedido"
-                >
-                  <span className={`transition-transform ${expandido[p.id] ? 'rotate-180' : ''}`}>▾</span>
-                </button>
-              </div>
+              {p.modo === 'entrega' && (
+                <div className="mt-3 flex items-center gap-2 text-sm bg-cream rounded-lg px-3 py-2">
+                  <span className="font-semibold text-ink/70">🛵 Taxa de entrega: R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={taxaEditando !== undefined ? taxaEditando : (p.taxa_entrega != null ? Number(p.taxa_entrega).toFixed(2) : '')}
+                    onChange={(e) => setTaxasEditando((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                    onBlur={() => salvarTaxa(p)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                    className="w-20 border rounded px-2 py-1 bg-white"
+                  />
+                  <span className="text-xs text-ink/40">
+                    {p.taxa_entrega == null ? 'não definida (deixe 0 se for sem custo)' : `Subtotal R$ ${Number(p.total).toFixed(2)} + taxa`}
+                  </span>
+                </div>
+              )}
+
+              {expandido[p.id] && (
+                <div className="mt-3 pt-3 border-t border-dashed border-ink/10 text-sm">
+                  {carregandoDetalhe[p.id] && <p className="text-ink/40 text-xs">Carregando resumo…</p>}
+                  {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).map((m: any) => {
+                    const partes = [
+                      m.arroz?.nome, m.feijao?.nome,
+                      m.pedido_marmita_guarnicoes?.length ? m.pedido_marmita_guarnicoes.map((g: any) => g.itens_estoque?.nome).join(' / ') : null,
+                      m.salada?.nome, m.carne?.nome,
+                    ].filter(Boolean);
+                    return (
+                      <div key={m.numero} className="mb-2">
+                        <div className="font-bold text-green-dark">Marmita {m.numero} — {m.tamanho?.nome}</div>
+                        <div className="text-ink/60 text-xs">{partes.length ? partes.join(', ') : 'sem acompanhamentos escolhidos'}</div>
+                        {m.pedido_marmita_extra_carnes?.length > 0 && (
+                          <div className="text-ink/60 text-xs">
+                            + {m.extra?.nome}: {m.pedido_marmita_extra_carnes.map((e: any) => `${e.quantidade}x ${e.itens_estoque?.nome}`).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).length === 0 && (
+                    <p className="text-ink/40 text-xs">Sem detalhes de marmitas para este pedido.</p>
+                  )}
+                </div>
+              )}
             </div>
-
-            {expandido[p.id] && (
-              <div className="mt-3 pt-3 border-t border-dashed border-ink/10 text-sm">
-                {carregandoDetalhe[p.id] && <p className="text-ink/40 text-xs">Carregando resumo…</p>}
-                {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).map((m: any) => {
-                  const partes = [
-                    m.arroz?.nome, m.feijao?.nome,
-                    m.pedido_marmita_guarnicoes?.length ? m.pedido_marmita_guarnicoes.map((g: any) => g.itens_estoque?.nome).join(' / ') : null,
-                    m.salada?.nome, m.carne?.nome,
-                  ].filter(Boolean);
-                  return (
-                    <div key={m.numero} className="mb-2">
-                      <div className="font-bold text-green-dark">Marmita {m.numero} — {m.tamanho?.nome}</div>
-                      <div className="text-ink/60 text-xs">{partes.length ? partes.join(', ') : 'sem acompanhamentos escolhidos'}</div>
-                      {m.pedido_marmita_extra_carnes?.length > 0 && (
-                        <div className="text-ink/60 text-xs">
-                          + {m.extra?.nome}: {m.pedido_marmita_extra_carnes.map((e: any) => `${e.quantidade}x ${e.itens_estoque?.nome}`).join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).length === 0 && (
-                  <p className="text-ink/40 text-xs">Sem detalhes de marmitas para este pedido.</p>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

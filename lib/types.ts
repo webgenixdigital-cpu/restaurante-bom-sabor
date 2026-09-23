@@ -71,5 +71,6 @@ export interface Pedido {
   origem: 'site' | 'ifood';
   observacoes: string | null;
   impresso: boolean;
+  taxa_entrega: number | null;
   created_at: string;
 }

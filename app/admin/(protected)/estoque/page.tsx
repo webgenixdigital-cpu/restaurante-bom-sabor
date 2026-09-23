@@ -10,6 +10,8 @@ const NOMES: Record<CategoriaId, string> = {
   massa: 'Massas (pedido avulso)', congelados: 'Congelados (pedido avulso)',
 };
 const ORDEM: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra', 'massa', 'congelados'];
+// Só estas categorias têm preço editável; os opcionais da marmita não têm valor adicional
+const COM_PRECO: CategoriaId[] = ['tamanho', 'extra', 'massa', 'congelados'];
 
 export default function EstoquePage() {
   const supabase = useMemo(() => createClient(), []);
@@ -96,8 +98,8 @@ export default function EstoquePage() {
       </div>
 
       <div className="bg-green-50 border border-green-200 rounded-2xl p-3 mb-5 text-sm text-green-800">
-        🌱 Clique no ícone de folha pra marcar como vegetariano. Clique no campo de preço pra editar o valor de cada item
-        (essencial pras Massas e Congelados, que não têm preço embutido em um "tamanho").
+        🌱 Clique no ícone de folha pra marcar como vegetariano. O campo de preço aparece só em Tamanhos,
+        Adicionais, Massas e Congelados — os demais opcionais não têm valor adicional.
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-5 text-sm text-blue-800">
@@ -108,6 +110,7 @@ export default function EstoquePage() {
         const itensCategoria = porCategoria[cat] || [];
         if (itensCategoria.length === 0) return null;
         const semAtivacaoDiaria = cat === 'tamanho';
+        const temPreco = COM_PRECO.includes(cat);
         return (
           <div key={cat} className="bg-white rounded-2xl shadow p-4 mb-4">
             <h2 className="font-bold text-sm text-orange-dark mb-3 uppercase tracking-wide">{NOMES[cat]}</h2>
@@ -137,18 +140,20 @@ export default function EstoquePage() {
                       </button>
                     )}
 
-                    <div className="flex items-center gap-1 px-3 pb-2 -mt-1" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs">R$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={precoEditando !== undefined ? precoEditando : item.preco.toFixed(2)}
-                        onChange={(e) => setPrecosEditando((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                        onBlur={() => salvarPreco(item)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                        className="w-16 text-xs border rounded px-1.5 py-0.5 bg-white text-ink"
-                      />
-                    </div>
+                    {temPreco && (
+                      <div className="flex items-center gap-1 px-3 pb-2 -mt-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs">R$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={precoEditando !== undefined ? precoEditando : item.preco.toFixed(2)}
+                          onChange={(e) => setPrecosEditando((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          onBlur={() => salvarPreco(item)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          className="w-16 text-xs border rounded px-1.5 py-0.5 bg-white text-ink"
+                        />
+                      </div>
+                    )}
 
                     <span
                       onClick={() => alternarVegetariano(item)}

@@ -14,6 +14,7 @@ const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
+const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão (na entrega)' };
 
 type Etapa =
   | 'nome' | 'tipoPedido' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
@@ -27,7 +28,9 @@ export default function CardapioPage() {
   const [nome, setNome] = useState('');
   const [tipoPedido, setTipoPedido] = useState<'marmita' | 'avulso' | null>(null);
   const [modo, setModo] = useState<'retirada' | 'entrega' | null>(null);
-  const [endereco, setEndereco] = useState('');
+  const [rua, setRua] = useState('');
+  const [numero, setNumero] = useState('');
+  const [bairro, setBairro] = useState('');
   const [quantidade, setQuantidade] = useState(1);
   const [modoMarmitas, setModoMarmitas] = useState<'igual' | 'diferentes' | null>(null);
   const [pagamento, setPagamento] = useState<string | null>(null);
@@ -41,6 +44,9 @@ export default function CardapioPage() {
   const [etapa, setEtapa] = useState<Etapa>('nome');
   const [enviando, setEnviando] = useState(false);
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
+
+  const endereco = `${rua.trim()}, ${numero.trim()} - ${bairro.trim()}`;
+  const enderecoValido = rua.trim().length >= 3 && numero.trim().length >= 1 && bairro.trim().length >= 2;
 
   useEffect(() => {
     async function carregar() {
@@ -186,8 +192,7 @@ export default function CardapioPage() {
       setEtapa('pagamento');
     }
   }
-
-  const total = useMemo(() => {
+    const total = useMemo(() => {
     if (tipoPedido === 'avulso') {
       return escolhasAvulsas().reduce((s, e) => s + e.item.preco * e.quantidade, 0);
     }
@@ -214,8 +219,17 @@ export default function CardapioPage() {
     return txt;
   }
 
-  function descreverAvulso(): string {
-    return escolhasAvulsas().map((e) => `${e.quantidade}x ${e.item.nome}`).join('\n');
+  // Versão detalhada, linha a linha, para a mensagem do WhatsApp
+  function detalharMarmitaWhats(m: MarmitaConfig): string {
+    const linhas: string[] = [];
+    if (m.arroz) linhas.push(`• Arroz: ${m.arroz.nome}`);
+    if (m.feijao) linhas.push(`• Feijão: ${m.feijao.nome}`);
+    if (m.guarnicoes.length) linhas.push(`• Guarnições: ${m.guarnicoes.map((g) => g.nome).join(', ')}`);
+    if (m.salada) linhas.push(`• Salada: ${m.salada.nome}`);
+    if (m.carne) linhas.push(`• Carne: ${m.carne.nome}`);
+    if (m.extra) linhas.push(`• ${m.extra.tipo.nome}: ${m.extra.escolhas.map((e) => `${e.quantidade}x ${e.carne.nome}`).join(', ')}`);
+    if (!linhas.length) linhas.push('• Sem acompanhamentos escolhidos');
+    return linhas.join('\n');
   }
 
   async function copiarPix() {
@@ -254,7 +268,7 @@ export default function CardapioPage() {
           nome_cliente: nome,
           modo,
           endereco: modo === 'entrega' ? endereco : null,
-          forma_pagamento: pagamento,
+          forma_pagamento: PAGAMENTO_LABEL[pagamento || ''] || pagamento,
           total,
           marmitas: tipoPedido === 'marmita' ? marmitas : [],
           itensAvulsos: tipoPedido === 'avulso' ? escolhasAvulsas() : [],
@@ -263,30 +277,36 @@ export default function CardapioPage() {
       const data = await resp.json();
       if (data.codigo) {
         setCodigoPedido(data.codigo);
-        const numero = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+        const numeroWhats = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
-        const conteudo = tipoPedido === 'avulso'
-          ? descreverAvulso()
-          : (modoMarmitas === 'diferentes'
-              ? marmitas.map((m) => `*Marmita ${m.numero} — ${m.tamanho.nome}*\n${descreverMarmita(m)}`).join('\n\n')
-              : marmitas[0]
-                ? `*${marmitas[0].tamanho.nome} × ${quantidade}*\n${descreverMarmita(marmitas[0])}`
-                : '');
+        let itensTxt = '';
+        if (tipoPedido === 'avulso') {
+          itensTxt = `*Massas / Congelados:*\n` + escolhasAvulsas().map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n');
+        } else if (modoMarmitas === 'diferentes') {
+          itensTxt = marmitas.map((m) => `*Marmita ${m.numero} — ${m.tamanho.nome}*\n${detalharMarmitaWhats(m)}`).join('\n\n');
+        } else if (marmitas[0]) {
+          itensTxt = `*${quantidade}x Marmita ${marmitas[0].tamanho.nome}*${quantidade > 1 ? ' (todas iguais)' : ''}\n${detalharMarmitaWhats(marmitas[0])}`;
+        }
+
+        const blocoEntrega = modo === 'entrega'
+          ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
+          : `*Tipo:* 🏠 Retirada no restaurante`;
 
         const texto = encodeURIComponent(
           `*Pedido #${data.codigo} — Bom Sabor* 🍱\n\n` +
-          `*Modo:* ${modo === 'entrega' ? `Entrega — ${endereco}` : 'Retirada no restaurante'}\n\n` +
-          `${conteudo}\n\n` +
+          `*Cliente:* ${nome.trim()}\n` +
+          `${blocoEntrega}\n` +
+          `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n\n` +
+          `${itensTxt}\n\n` +
           `Já enviado pelo site — só confirmando por aqui!`
         );
-        window.open(`https://wa.me/${numero}?text=${texto}`, '_blank');
+        window.open(`https://wa.me/${numeroWhats}?text=${texto}`, '_blank');
       }
     } finally {
       setEnviando(false);
     }
   }
-
-  if (carregando) return <div className="p-10 text-center text-ink/60">Carregando cardápio do dia…</div>;
+    if (carregando) return <div className="p-10 text-center text-ink/60">Carregando cardápio do dia…</div>;
 
   if (codigoPedido) {
     return (
@@ -356,7 +376,20 @@ export default function CardapioPage() {
 
         {etapa === 'endereco' && (
           <Step titulo="Endereço de entrega">
-            <input className="input" value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua, número, bairro" />
+            <div className="flex flex-col gap-2">
+              <input className="input" value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Rua" autoComplete="address-line1" />
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  style={{ width: '35%' }}
+                  value={numero}
+                  onChange={(e) => setNumero(e.target.value)}
+                  placeholder="Número"
+                  inputMode="numeric"
+                />
+                <input className="input flex-1" value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" />
+              </div>
+            </div>
             <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mt-3">
               🛵 A taxa de entrega varia conforme a localidade e será somada ao total, confirmada pelo WhatsApp.
               Aos domingos e feriados a entrega é terceirizada e o valor pode ser diferente — também confirmado por lá.
@@ -364,7 +397,7 @@ export default function CardapioPage() {
             <Botoes
               onBack={() => setEtapa('modo')}
               onNext={() => setEtapa(tipoPedido === 'avulso' ? 'itensAvulsos' : 'quantidade')}
-              disabled={endereco.trim().length < 5}
+              disabled={!enderecoValido}
             />
           </Step>
         )}
@@ -549,10 +582,12 @@ export default function CardapioPage() {
           <Step titulo="Resumo do pedido">
             <div className="text-sm space-y-1 mb-4">
               <SummaryLine k="Nome" v={nome} />
-              <SummaryLine k="Modo" v={modo === 'entrega' ? 'Entrega' : 'Retirada'} />
-              {modo === 'entrega' && <SummaryLine k="Endereço" v={endereco} />}
+              <SummaryLine k="Tipo" v={modo === 'entrega' ? 'Entrega' : 'Retirada no restaurante'} />
+              {modo === 'entrega' && <SummaryLine k="Rua" v={rua} />}
+              {modo === 'entrega' && <SummaryLine k="Número" v={numero} />}
+              {modo === 'entrega' && <SummaryLine k="Bairro" v={bairro} />}
               {tipoPedido === 'marmita' && <SummaryLine k="Quantidade" v={`${quantidade} marmita(s)`} />}
-              <SummaryLine k="Pagamento" v={pagamento || ''} />
+              <SummaryLine k="Pagamento" v={PAGAMENTO_LABEL[pagamento || ''] || ''} />
             </div>
 
             <div className="bg-cream rounded-xl p-3 mb-4 space-y-3">
