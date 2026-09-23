@@ -1,5 +1,5 @@
 -- ============================================================
--- BOM SABOR — Schema Supabase
+-- CANTINA BOM SABOR — Schema Supabase
 -- ============================================================
 -- Rode este arquivo no SQL Editor do seu projeto Supabase.
 

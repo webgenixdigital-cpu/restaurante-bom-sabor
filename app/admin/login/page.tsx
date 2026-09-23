@@ -26,7 +26,7 @@ export default function LoginAdmin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-ink">
       <form onSubmit={entrar} className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl">
-        <h1 className="text-xl font-bold text-green-dark mb-1">Bom Sabor — Admin</h1>
+        <h1 className="text-xl font-bold text-green-dark mb-1">Cantina Bom Sabor — Admin</h1>
         <p className="text-sm text-ink/50 mb-6">Entre para gerenciar cardápio e pedidos.</p>
         <input
           className="w-full mb-3 px-4 py-3 rounded-xl border" placeholder="E-mail"

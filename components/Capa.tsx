@@ -5,7 +5,7 @@ export default function Capa() {
       <div className="relative w-full h-[200px] sm:h-[260px] overflow-hidden">
         <img
           src="https://aghojttgeyvxwnvdjevt.supabase.co/storage/v1/object/public/fotos/imagem_2026-09-14_200535608.png"
-          alt="Bom Sabor"
+          alt="Cantina Bom Sabor"
           className="w-full h-full object-cover"
         />
         {/* Composição: gradiente pra dar profundidade e legibilidade */}
@@ -18,7 +18,7 @@ export default function Capa() {
         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white shadow-xl overflow-hidden bg-white">
           <img
             src="https://aghojttgeyvxwnvdjevt.supabase.co/storage/v1/object/public/fotos/logo.jpg"
-            alt="Bom Sabor"
+            alt="Cantina Bom Sabor"
             className="w-full h-full object-cover"
           />
         </div>

@@ -1,4 +1,4 @@
-# Bom Sabor — Cardápio + Admin
+# Cantina Bom Sabor — Cardápio + Admin
 
 Evolução do projeto Marmitesse: agora com banco de dados, área administrativa
 e gestão de pedidos em tempo real.
@@ -83,5 +83,5 @@ agente local (ex: QZ Tray) — é um passo à parte, opcional.
 - **Visual**: esta versão prioriza a arquitetura (banco, admin, pedidos).
   O estilo visual do cardápio público pode ser portado de volta do HTML
   original do Marmitesse — cores, fontes e o rodapé Genix Catalog.
-- **Nome "Bom Sabor" nos textos**: ajustar rodapé, mensagens de WhatsApp
+- **Nome "Cantina Bom Sabor" nos textos**: ajustar rodapé, mensagens de WhatsApp
   e branding conforme o material final do restaurante.

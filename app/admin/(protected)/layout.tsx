@@ -15,10 +15,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <span className="font-bold flex items-center gap-2">
           <img
             src="https://aghojttgeyvxwnvdjevt.supabase.co/storage/v1/object/public/fotos/logo.jpg"
-            alt="Bom Sabor"
+            alt="Cantina Bom Sabor"
             className="w-7 h-7 rounded-full object-cover ring-1 ring-white/20"
           />
-          Bom Sabor — Admin
+          Cantina Bom Sabor — Admin
         </span>
         <nav className="flex gap-3 text-sm items-center">
           <Link

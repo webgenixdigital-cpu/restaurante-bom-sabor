@@ -293,7 +293,7 @@ export default function CardapioPage() {
           : `*Tipo:* 🏠 Retirada no restaurante`;
 
         const texto = encodeURIComponent(
-          `*Pedido #${data.codigo} — Bom Sabor* 🍱\n\n` +
+          `*Pedido #${data.codigo} — Cantina Bom Sabor* 🍱\n\n` +
           `*Cliente:* ${nome.trim()}\n` +
           `${blocoEntrega}\n` +
           `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n\n` +
@@ -322,7 +322,7 @@ export default function CardapioPage() {
     <>
       <Capa />
       <main className="max-w-lg mx-auto px-4 pb-8 pt-16 sm:pt-20">
-        <h1 className="text-2xl font-bold text-green-dark mb-6 text-center">Bom Sabor</h1>
+        <h1 className="text-2xl font-bold text-green-dark mb-6 text-center">Cantina Bom Sabor</h1>
 
         <div className="bg-white rounded-2xl shadow p-5">
 

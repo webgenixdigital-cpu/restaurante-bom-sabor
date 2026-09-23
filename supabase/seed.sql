@@ -1,5 +1,5 @@
 -- ============================================================
--- SEED — itens do estoque (ajuste nomes/preços conforme o Bom Sabor)
+-- SEED — itens do estoque (ajuste nomes/preços conforme o Cantina Bom Sabor)
 -- Rode depois do schema.sql
 -- ============================================================
 

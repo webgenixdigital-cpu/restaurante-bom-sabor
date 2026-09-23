@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Bom Sabor — Pedido Online',
+  title: 'Cantina Bom Sabor — Pedido Online',
   description: 'Monte sua marmita e faça seu pedido',
 };
 
