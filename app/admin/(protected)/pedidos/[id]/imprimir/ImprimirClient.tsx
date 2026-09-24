@@ -19,7 +19,7 @@ export default function ImprimirClient({
   const taxa = Number(pedido.taxa_entrega || 0);
 
   return (
-    <div className="max-w-xs mx-auto p-4 font-mono text-[15px] leading-snug font-semibold tracking-tight">
+    <div className="max-w-xs mx-auto p-4 font-mono text-[20px] leading-snug font-semibold tracking-tight">
       <div className="text-center mb-2">
         <div className="text-lg font-extrabold">CANTINA BOM SABOR</div>
         <div className="text-sm font-bold">Pedido #{pedido.codigo}</div>
