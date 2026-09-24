@@ -20,8 +20,9 @@ export async function POST(req: Request) {
       nome_cliente: body.nome_cliente,
       modo: body.modo,
       endereco: body.endereco || null,
-      forma_pagamento: body.forma_pagamento,
+            forma_pagamento: body.forma_pagamento,
       total: body.total,
+      observacoes: body.observacoes || null,
       origem: 'site',
     })
     .select()

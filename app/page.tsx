@@ -35,6 +35,7 @@ export default function CardapioPage() {
   const [modoMarmitas, setModoMarmitas] = useState<'igual' | 'diferentes' | null>(null);
   const [pagamento, setPagamento] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
+    const [observacoes, setObservacoes] = useState('');
 
   const [atual, setAtual] = useState<Partial<Record<CategoriaId, ItemEstoque | ItemEstoque[]>>>({});
   const [extraQuantidades, setExtraQuantidades] = useState<Record<string, number>>({});
@@ -270,6 +271,7 @@ export default function CardapioPage() {
           endereco: modo === 'entrega' ? endereco : null,
           forma_pagamento: PAGAMENTO_LABEL[pagamento || ''] || pagamento,
           total,
+          observacoes: observacoes.trim() || undefined,
           marmitas: tipoPedido === 'marmita' ? marmitas : [],
           itensAvulsos: tipoPedido === 'avulso' ? escolhasAvulsas() : [],
         }),
@@ -292,12 +294,13 @@ export default function CardapioPage() {
           ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
           : `*Tipo:* 🏠 Retirada no restaurante`;
 
-        const texto = encodeURIComponent(
+                const texto = encodeURIComponent(
           `*Pedido #${data.codigo} — Cantina Bom Sabor* 🍱\n\n` +
           `*Cliente:* ${nome.trim()}\n` +
           `${blocoEntrega}\n` +
-          `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n\n` +
-          `${itensTxt}\n\n` +
+          `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n` +
+          (observacoes.trim() ? `*Observações:* ${observacoes.trim()}\n` : '') +
+          `\n${itensTxt}\n\n` +
           `Já enviado pelo site — só confirmando por aqui!`
         );
         window.open(`https://wa.me/${numeroWhats}?text=${texto}`, '_blank');
@@ -612,7 +615,18 @@ export default function CardapioPage() {
                       </div>
                     )}
             </div>
-
+            <div className="mb-4">
+              <label className="text-xs font-bold text-ink/50 uppercase tracking-wide block mb-1">
+                Observações (opcional)
+              </label>
+              <textarea
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Ex.: sem cebola, ponto da carne, entregar na portaria..."
+                rows={3}
+                className="input resize-none"
+              />
+            </div>
             <div className="flex justify-between items-center border-t-2 border-ink pt-3 mb-4">
               <span className="font-bold">Total</span>
               <span className="text-2xl font-extrabold text-green-dark">R$ {total.toFixed(2)}</span>

@@ -68,7 +68,6 @@ export default function EstoquePage() {
   const porCategoria = useMemo(() => {
     const agrupado: Record<string, ItemEstoque[]> = {};
     itens.forEach((i) => { agrupado[i.categoria_id] = agrupado[i.categoria_id] || []; agrupado[i.categoria_id].push(i); });
-    // ordem alfabética em tudo, exceto tamanho (mantém a ordem crescente de porte/preço)
     Object.keys(agrupado).forEach((cat) => {
       if (cat !== 'tamanho') agrupado[cat].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     });
@@ -77,12 +76,12 @@ export default function EstoquePage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-bold text-green-dark">Cardápio de hoje ({hoje.split('-').reverse().join('/')})</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+        <h1 className="text-lg sm:text-xl font-bold text-green-dark">Cardápio de hoje ({hoje.split('-').reverse().join('/')})</h1>
         {salvando && <span className="text-xs text-ink/40">salvando…</span>}
       </div>
 
-      <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 flex items-center justify-between gap-4">
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-sm text-red-800">
           <b>Lembrete:</b> essa alteração ainda não é replicada automaticamente no iFood.
           Depois de ajustar aqui, atualize também por lá.
@@ -91,7 +90,7 @@ export default function EstoquePage() {
           href="https://portal.ifood.com.br/"
           target="_blank"
           rel="noopener noreferrer"
-          className="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl whitespace-nowrap flex-shrink-0"
+          className="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl whitespace-nowrap flex-shrink-0 text-center"
         >
           🛵 Abrir iFood
         </a>
@@ -114,7 +113,7 @@ export default function EstoquePage() {
         return (
           <div key={cat} className="bg-white rounded-2xl shadow p-4 mb-4">
             <h2 className="font-bold text-sm text-orange-dark mb-3 uppercase tracking-wide">{NOMES[cat]}</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {itensCategoria.map((item) => {
                 const ativo = semAtivacaoDiaria ? true : disponiveis[item.id];
                 const precoEditando = precosEditando[item.id];
@@ -126,17 +125,17 @@ export default function EstoquePage() {
                     }`}
                   >
                     {semAtivacaoDiaria ? (
-                      <div className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                      <div className="w-full flex items-center justify-between px-3 py-2.5 text-left gap-2">
                         <span className="font-semibold pl-4">{item.emoji} {item.nome}</span>
-                        <span className="text-[10px] font-bold text-green-dark uppercase whitespace-nowrap">Sempre ativo</span>
+                        <span className="text-[10px] font-bold text-green-dark uppercase whitespace-nowrap flex-shrink-0">Sempre ativo</span>
                       </div>
                     ) : (
                       <button
                         onClick={() => alternar(item)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left gap-2"
                       >
                         <span className="font-semibold pl-4">{item.emoji} {item.nome}</span>
-                        <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ml-2 ${ativo ? 'bg-green border-green' : 'border-ink/20'}`} />
+                        <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${ativo ? 'bg-green border-green' : 'border-ink/20'}`} />
                       </button>
                     )}
 

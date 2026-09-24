@@ -29,7 +29,8 @@ export default function ImprimirClient({
 
       <div>Cliente: {pedido.nome_cliente}</div>
       <div>{isEntrega ? `Entrega: ${pedido.endereco}` : 'RETIRADA NO LOCAL'}</div>
-      <div>Pagamento: {pedido.forma_pagamento}</div>
+            <div>Pagamento: {pedido.forma_pagamento}</div>
+      {pedido.observacoes && <div>Obs: {pedido.observacoes}</div>}
 
       <div className="border-t-2 border-black my-2" />
 

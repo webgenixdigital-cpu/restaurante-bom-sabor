@@ -101,30 +101,30 @@ export default function PedidosPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-xl font-bold text-green-dark mb-4">Pedidos</h1>
+      <h1 className="text-lg sm:text-xl font-bold text-green-dark mb-4">Pedidos</h1>
 
       {/* Dashboard fixo — sempre do dia de hoje */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="text-2xl font-extrabold text-green-dark">{pedidosHojeValidos.length}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6">
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">{pedidosHojeValidos.length}</div>
           <div className="text-xs text-ink/50 font-semibold">Pedidos hoje</div>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="text-2xl font-extrabold text-green-dark">R$ {faturamentoHoje.toFixed(2)}</div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">R$ {faturamentoHoje.toFixed(2)}</div>
           <div className="text-xs text-ink/50 font-semibold">Faturamento estimado</div>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="text-2xl font-extrabold text-orange-dark">{entregasHoje}</div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{entregasHoje}</div>
           <div className="text-xs text-ink/50 font-semibold">Entregas</div>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="text-2xl font-extrabold text-orange-dark">{retiradasHoje}</div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{retiradasHoje}</div>
           <div className="text-xs text-ink/50 font-semibold">Retiradas</div>
         </div>
       </div>
       <p className="text-xs text-ink/40 -mt-4 mb-5">Faturamento inclui as taxas de entrega lançadas e não conta pedidos cancelados.</p>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <span className="text-sm font-semibold text-ink/60">Filtrar por dia</span>
         <select
           value={diaSelecionado}
@@ -144,14 +144,14 @@ export default function PedidosPage() {
           const taxaEditando = taxasEditando[p.id];
           return (
             <div key={p.id} className="bg-white rounded-2xl shadow p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-lg">#{p.codigo}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-bold text-base sm:text-lg">#{p.codigo}</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_COR[p.status]}`}>{STATUS_LABEL[p.status]}</span>
                     {p.origem === 'ifood' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">iFood</span>}
                   </div>
-                  <div className="font-semibold">{p.nome_cliente}</div>
+                  <div className="font-semibold truncate">{p.nome_cliente}</div>
                   <div className="text-sm text-ink/50">
                     {p.modo === 'entrega' ? `Entrega — ${p.endereco}` : 'Retirada no restaurante'} · {p.forma_pagamento} · R$ {totalComTaxa(p).toFixed(2)}
                   </div>
@@ -160,11 +160,11 @@ export default function PedidosPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:flex-shrink-0">
                   <select
                     value={p.status}
                     onChange={(e) => mudarStatus(p.id, e.target.value as Pedido['status'])}
-                    className="text-sm border rounded-lg px-2 py-1.5"
+                    className="text-sm border rounded-lg px-2 py-1.5 flex-1 sm:flex-initial min-w-0"
                   >
                     {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
@@ -177,7 +177,7 @@ export default function PedidosPage() {
                   </Link>
                   <button
                     onClick={() => alternarExpandir(p.id)}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-ink/10 text-ink/50 hover:bg-cream transition"
+                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-ink/10 text-ink/50 hover:bg-cream transition flex-shrink-0"
                     title="Ver resumo do pedido"
                   >
                     <span className={`transition-transform ${expandido[p.id] ? 'rotate-180' : ''}`}>▾</span>
@@ -186,7 +186,7 @@ export default function PedidosPage() {
               </div>
 
               {p.modo === 'entrega' && (
-                <div className="mt-3 flex items-center gap-2 text-sm bg-cream rounded-lg px-3 py-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm bg-cream rounded-lg px-3 py-2">
                   <span className="font-semibold text-ink/70">🛵 Taxa de entrega: R$</span>
                   <input
                     type="text"
@@ -206,6 +206,11 @@ export default function PedidosPage() {
 
               {expandido[p.id] && (
                 <div className="mt-3 pt-3 border-t border-dashed border-ink/10 text-sm">
+                  {p.observacoes && (
+                    <div className="mb-3 bg-cream-2 rounded-lg p-2 text-xs text-ink/70">
+                      <b>Observações do cliente:</b> {p.observacoes}
+                    </div>
+                  )}
                   {carregandoDetalhe[p.id] && <p className="text-ink/40 text-xs">Carregando resumo…</p>}
                   {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).map((m: any) => {
                     const partes = [
