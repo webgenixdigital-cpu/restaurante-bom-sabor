@@ -501,11 +501,21 @@ export default function CardapioPage() {
                   else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
                 }}
                 onSkip={PULAVEL[cat] ? () => pularEtapa(cat) : undefined}
-                onNext={() => {
-                  if (cat !== 'extra') { setEtapa(proximaCategoria(cat)); return; }
-                  const sel = atual.extra as ItemEstoque | undefined;
-                  if (sel && sel.preco > 0) setEtapa('extraCarnes');
-                  else finalizarMarmitaAtual();
+                                onNext={() => {
+                  if (cat === 'extra') {
+                    const sel = atual.extra as ItemEstoque | undefined;
+                    if (sel && sel.preco > 0) setEtapa('extraCarnes');
+                    else finalizarMarmitaAtual();
+                    return;
+                  }
+                  if (cat === 'feijao') {
+                    const selFeijao = atual.feijao as ItemEstoque | undefined;
+                    if (selFeijao && selFeijao.nome.toLowerCase().includes('feijoada')) {
+                      finalizarMarmitaAtual();
+                      return;
+                    }
+                  }
+                  setEtapa(proximaCategoria(cat));
                 }}
                 disabled={!podeAvancar(cat)}
               />
