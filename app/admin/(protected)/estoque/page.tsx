@@ -19,7 +19,8 @@ export default function EstoquePage() {
   const [itens, setItens] = useState<ItemEstoque[]>([]);
   const [disponiveis, setDisponiveis] = useState<Record<string, boolean>>({});
   const [precosEditando, setPrecosEditando] = useState<Record<string, string>>({});
-  const [salvando, setSalvando] = useState(false);
+    const [salvando, setSalvando] = useState(false);
+  const [copiadoCardapio, setCopiadoCardapio] = useState(false);
   const hoje = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
@@ -65,7 +66,49 @@ export default function EstoquePage() {
     setSalvando(false);
     setPrecosEditando((prev) => { const c = { ...prev }; delete c[item.id]; return c; });
   }
+  function gerarTextoCardapio(): string {
+    const dataFormatada = hoje.split('-').reverse().join('/');
+    const linhas: string[] = [`*🍱 Cardápio de hoje — Cantina Bom Sabor*`, `_${dataFormatada}_`, ''];
 
+    ORDEM.forEach((cat) => {
+      const semAtivacaoDiaria = cat === 'tamanho';
+           const itensCategoria = (porCategoria[cat] || []).filter((item) =>
+        semAtivacaoDiaria ? true : disponiveis[item.id]
+      );
+      if (itensCategoria.length === 0) return;
+
+      linhas.push(`*${NOMES[cat]}*`);
+      itensCategoria.forEach((item) => {
+        const preco = item.preco > 0 ? ` — R$ ${item.preco.toFixed(2)}` : '';
+        const veg = item.vegetariano ? ' 🌱' : '';
+        linhas.push(`${item.emoji || '•'} ${item.nome}${preco}${veg}`);
+      });
+      linhas.push('');
+    });
+
+    linhas.push('📌 Pedir os itens separados em potes individuais tem acréscimo a partir de R$ 2,00 (embalagem).');
+    linhas.push('🛵 Taxa de entrega varia conforme a localidade e é confirmada pelo WhatsApp. Aos domingos/feriados a entrega é terceirizada.');
+    linhas.push('');
+    linhas.push('👉 Faça seu pedido pelo nosso cardápio online!');
+
+    return linhas.join('\n');
+  }
+
+  async function copiarCardapio() {
+    const texto = gerarTextoCardapio();
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiadoCardapio(true);
+      setTimeout(() => setCopiadoCardapio(false), 2500);
+    } catch {
+      alert('Não foi possível copiar automaticamente. Tente novamente.');
+    }
+  }
+
+  function enviarCardapioWhatsApp() {
+    const texto = encodeURIComponent(gerarTextoCardapio());
+    window.open(`https://wa.me/?text=${texto}`, '_blank');
+  }
   const porCategoria = useMemo(() => {
     const agrupado: Record<string, ItemEstoque[]> = {};
     itens.forEach((i) => { agrupado[i.categoria_id] = agrupado[i.categoria_id] || []; agrupado[i.categoria_id].push(i); });
@@ -171,6 +214,21 @@ export default function EstoquePage() {
           </div>
         );
       })}
+
+            <div className="bg-white rounded-2xl shadow p-4 mt-4 flex flex-col sm:flex-row gap-2">
+        <button
+          onClick={copiarCardapio}
+          className={`flex-1 font-bold px-4 py-3 rounded-xl text-white transition ${copiadoCardapio ? 'bg-green-dark' : 'bg-green'}`}
+        >
+          {copiadoCardapio ? 'Copiado! ✓' : '📋 Copiar cardápio do dia (texto)'}
+        </button>
+        <button
+          onClick={enviarCardapioWhatsApp}
+          className="flex-1 bg-[#25D366] hover:brightness-95 text-white font-bold px-4 py-3 rounded-xl transition"
+        >
+          📲 Enviar por WhatsApp
+        </button>
+      </div>
 
       <p className="text-xs text-ink/40 mt-2">
         Itens desmarcados somem do cardápio público automaticamente — sem precisar editar código nem redeploy.
