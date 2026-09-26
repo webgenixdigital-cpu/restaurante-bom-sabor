@@ -573,21 +573,24 @@ export default function CardapioPage() {
                 {etapa === 'incluirMassa' && (
           <Step titulo="Incluir massa no pedido">
             <p className="text-xs text-ink/60 mb-3">Adicione quantas quiser — o valor entra à parte, somado ao total.</p>
-            <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2">
               {(itensPorCategoria.massa || []).map((item) => {
-                const qtd = extrasQuantidades[item.id] || 0;
+                const selecionada = (extrasQuantidades[item.id] || 0) > 0;
                 return (
-                  <div key={item.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-cream">
-                    <span className="font-semibold text-sm flex items-center gap-1.5">
-                      {item.emoji} {item.nome}
-                      <span className="text-green-dark font-bold text-xs">R$ {item.preco.toFixed(2)}</span>
-                    </span>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, -1)}>−</button>
-                      <span className="w-5 text-center font-bold">{qtd}</span>
-                      <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, 1)}>+</button>
-                    </div>
-                  </div>
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setExtrasQuantidades((prev) => {
+                      const copia = { ...prev };
+                      if (selecionada) delete copia[item.id];
+                      else copia[item.id] = 1;
+                      return copia;
+                    })}
+                    className={`w-full flex justify-between items-center px-4 py-3 rounded-xl border-2 text-left ${selecionada ? 'border-green bg-cream-2' : 'border-transparent bg-cream'}`}
+                  >
+                    <span className="font-semibold text-sm">{item.emoji} {item.nome}</span>
+                    <span className="text-green-dark font-bold text-sm">R$ {item.preco.toFixed(2)}</span>
+                  </button>
                 );
               })}
             </div>
