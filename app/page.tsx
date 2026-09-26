@@ -10,7 +10,7 @@ const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnica
 const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
   tamanho: 'Escolha o tamanho', arroz: 'Escolha o arroz', feijao: 'Escolha o feijão',
   guarnicao: 'Escolha até 3 guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
-  extra: 'Deseja adicionar carne extra?', massa: '', congelados: '',
+  extra: 'Deseja adicionar carne extra?', massa: '', congelados: '', bebida: '', sobremesa: '',
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
@@ -18,7 +18,7 @@ const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheir
 
 type Etapa =
   | 'nome' | 'tipoPedido' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
-  | CategoriaId | 'extraCarnes' | 'itensAvulsos' | 'pagamento' | 'resumo';
+  | CategoriaId | 'extraCarnes' | 'itensAvulsos' | 'bebidasSobremesas' | 'pagamento' | 'resumo';
 
 export default function CardapioPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -35,11 +35,12 @@ export default function CardapioPage() {
   const [modoMarmitas, setModoMarmitas] = useState<'igual' | 'diferentes' | null>(null);
   const [pagamento, setPagamento] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
-    const [observacoes, setObservacoes] = useState('');
+  const [observacoes, setObservacoes] = useState('');
 
   const [atual, setAtual] = useState<Partial<Record<CategoriaId, ItemEstoque | ItemEstoque[]>>>({});
   const [extraQuantidades, setExtraQuantidades] = useState<Record<string, number>>({});
   const [avulsoQuantidades, setAvulsoQuantidades] = useState<Record<string, number>>({});
+  const [extrasQuantidades, setExtrasQuantidades] = useState<Record<string, number>>({});
   const [marmitas, setMarmitas] = useState<MarmitaConfig[]>([]);
 
   const [etapa, setEtapa] = useState<Etapa>('nome');
@@ -137,6 +138,16 @@ export default function CardapioPage() {
     });
   }
 
+  function ajustarQtdExtraItem(itemId: string, delta: number) {
+    setExtrasQuantidades((prev) => {
+      const atualQtd = prev[itemId] || 0;
+      const nova = Math.max(0, Math.min(20, atualQtd + delta));
+      const copia = { ...prev, [itemId]: nova };
+      if (nova === 0) delete copia[itemId];
+      return copia;
+    });
+  }
+
   function totalUnidadesExtra() {
     return Object.values(extraQuantidades).reduce((s, q) => s + q, 0);
   }
@@ -152,6 +163,17 @@ export default function CardapioPage() {
   function escolhasAvulsas(): ItemAvulsoEscolha[] {
     const disponiveis = itensAvulsosDisponiveis();
     return Object.entries(avulsoQuantidades)
+      .map(([itemId, quantidade]) => ({ item: disponiveis.find((i) => i.id === itemId)!, quantidade }))
+      .filter((e) => e.item && e.quantidade > 0);
+  }
+
+  function itensExtrasDisponiveis(): ItemEstoque[] {
+    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || [])];
+  }
+
+  function escolhasExtrasItens(): ItemAvulsoEscolha[] {
+    const disponiveis = itensExtrasDisponiveis();
+    return Object.entries(extrasQuantidades)
       .map(([itemId, quantidade]) => ({ item: disponiveis.find((i) => i.id === itemId)!, quantidade }))
       .filter((e) => e.item && e.quantidade > 0);
   }
@@ -190,19 +212,20 @@ export default function CardapioPage() {
         for (let i = 1; i < quantidade; i++) novasMarmitas.push(config);
         setMarmitas(novasMarmitas);
       }
-      setEtapa('pagamento');
+      setEtapa('bebidasSobremesas');
     }
   }
     const total = useMemo(() => {
-    if (tipoPedido === 'avulso') {
-      return escolhasAvulsas().reduce((s, e) => s + e.item.preco * e.quantidade, 0);
-    }
-    return marmitas.reduce((soma, m) => {
-      const precoExtra = m.extra ? m.extra.tipo.preco * m.extra.escolhas.reduce((s, e) => s + e.quantidade, 0) : 0;
-      const precoCarne = m.carne?.preco || 0;
-      return soma + m.tamanho.preco + precoCarne + precoExtra;
-    }, 0);
-  }, [marmitas, avulsoQuantidades, tipoPedido]);
+    const baseTotal = tipoPedido === 'avulso'
+      ? escolhasAvulsas().reduce((s, e) => s + e.item.preco * e.quantidade, 0)
+      : marmitas.reduce((soma, m) => {
+          const precoExtra = m.extra ? m.extra.tipo.preco * m.extra.escolhas.reduce((s, e) => s + e.quantidade, 0) : 0;
+          const precoCarne = m.carne?.preco || 0;
+          return soma + m.tamanho.preco + precoCarne + precoExtra;
+        }, 0);
+    const extrasTotal = escolhasExtrasItens().reduce((s, e) => s + e.item.preco * e.quantidade, 0);
+    return baseTotal + extrasTotal;
+  }, [marmitas, avulsoQuantidades, extrasQuantidades, tipoPedido]);
 
   function descreverMarmita(m: MarmitaConfig): string {
     const partes = [
@@ -262,6 +285,11 @@ export default function CardapioPage() {
   async function enviarPedido() {
     setEnviando(true);
     try {
+      const itensAvulsosPayload = [
+        ...(tipoPedido === 'avulso' ? escolhasAvulsas() : []),
+        ...escolhasExtrasItens(),
+      ];
+
       const resp = await fetch('/api/pedidos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -273,7 +301,7 @@ export default function CardapioPage() {
           total,
           observacoes: observacoes.trim() || undefined,
           marmitas: tipoPedido === 'marmita' ? marmitas : [],
-          itensAvulsos: tipoPedido === 'avulso' ? escolhasAvulsas() : [],
+          itensAvulsos: itensAvulsosPayload,
         }),
       });
       const data = await resp.json();
@@ -290,17 +318,22 @@ export default function CardapioPage() {
           itensTxt = `*${quantidade}x Marmita ${marmitas[0].tamanho.nome}*${quantidade > 1 ? ' (todas iguais)' : ''}\n${detalharMarmitaWhats(marmitas[0])}`;
         }
 
+        const escolhasExtras = escolhasExtrasItens();
+        const extrasTxt = escolhasExtras.length
+          ? `\n\n*Bebidas / Sobremesas:*\n` + escolhasExtras.map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n')
+          : '';
+
         const blocoEntrega = modo === 'entrega'
           ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
           : `*Tipo:* 🏠 Retirada no restaurante`;
 
-                const texto = encodeURIComponent(
+        const texto = encodeURIComponent(
           `*Pedido #${data.codigo} — Cantina Bom Sabor* 🍱\n\n` +
           `*Cliente:* ${nome.trim()}\n` +
           `${blocoEntrega}\n` +
           `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n` +
           (observacoes.trim() ? `*Observações:* ${observacoes.trim()}\n` : '') +
-          `\n${itensTxt}\n\n` +
+          `\n${itensTxt}${extrasTxt}\n\n` +
           `Já enviado pelo site — só confirmando por aqui!`
         );
         window.open(`https://wa.me/${numeroWhats}?text=${texto}`, '_blank');
@@ -309,7 +342,8 @@ export default function CardapioPage() {
       setEnviando(false);
     }
   }
-    if (carregando) return <div className="p-10 text-center text-ink/60">Carregando cardápio do dia…</div>;
+
+  if (carregando) return <div className="p-10 text-center text-ink/60">Carregando cardápio do dia…</div>;
 
   if (codigoPedido) {
     return (
@@ -445,7 +479,7 @@ export default function CardapioPage() {
             )}
             <Botoes
               onBack={() => setEtapa(modo === 'entrega' ? 'endereco' : 'modo')}
-              onNext={() => setEtapa('pagamento')}
+              onNext={() => setEtapa('bebidasSobremesas')}
               disabled={totalUnidadesAvulso() === 0}
             />
           </Step>
@@ -501,7 +535,7 @@ export default function CardapioPage() {
                   else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
                 }}
                 onSkip={PULAVEL[cat] ? () => pularEtapa(cat) : undefined}
-                                onNext={() => {
+                onNext={() => {
                   if (cat === 'extra') {
                     const sel = atual.extra as ItemEstoque | undefined;
                     if (sel && sel.preco > 0) setEtapa('extraCarnes');
@@ -522,8 +556,7 @@ export default function CardapioPage() {
             </Step>
           );
         })()}
-
-        {etapa === 'extraCarnes' && (() => {
+                {etapa === 'extraCarnes' && (() => {
           const tipoExtra = atual.extra as ItemEstoque;
           const carnes = itensPorCategoria.carne || [];
           return (
@@ -561,6 +594,50 @@ export default function CardapioPage() {
           );
         })()}
 
+        {etapa === 'bebidasSobremesas' && (
+          <Step titulo="Quer bebida ou sobremesa?">
+            <p className="text-xs text-ink/60 mb-3">Opcional — só some ao total se você escolher algo.</p>
+            {['bebida', 'sobremesa'].map((cat) => {
+              const itens = itensPorCategoria[cat] || [];
+              if (itens.length === 0) return null;
+              return (
+                <div key={cat} className="mb-4">
+                  <p className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-2">
+                    {cat === 'bebida' ? 'Bebidas' : 'Sobremesas'}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {itens.map((item) => {
+                      const qtd = extrasQuantidades[item.id] || 0;
+                      return (
+                        <div key={item.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-cream">
+                          <span className="font-semibold text-sm flex items-center gap-1.5">
+                            {item.emoji} {item.nome}
+                            <span className="text-green-dark font-bold text-xs">R$ {item.preco.toFixed(2)}</span>
+                          </span>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, -1)}>−</button>
+                            <span className="w-5 text-center font-bold">{qtd}</span>
+                            <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, 1)}>+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {itensExtrasDisponiveis().length === 0 && (
+              <p className="text-sm text-ink/60">Nenhuma bebida ou sobremesa disponível hoje.</p>
+            )}
+            {escolhasExtrasItens().length > 0 && (
+              <p className="text-sm font-bold text-green-dark mt-1 text-right">
+                Subtotal bebidas/sobremesas: R$ {escolhasExtrasItens().reduce((s, e) => s + e.item.preco * e.quantidade, 0).toFixed(2)}
+              </p>
+            )}
+            <Botoes onNext={() => setEtapa('pagamento')} />
+          </Step>
+        )}
+
         {etapa === 'pagamento' && (
           <Step titulo="Forma de pagamento">
             <Opcoes
@@ -584,7 +661,7 @@ export default function CardapioPage() {
               </div>
             )}
             <Botoes
-              onBack={() => setEtapa(tipoPedido === 'avulso' ? 'itensAvulsos' : 'extra')}
+              onBack={() => setEtapa('bebidasSobremesas')}
               onNext={() => setEtapa('resumo')}
               disabled={!pagamento}
             />
@@ -624,6 +701,17 @@ export default function CardapioPage() {
                         <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(marmitas[0])}</div>
                       </div>
                     )}
+              {escolhasExtrasItens().length > 0 && (
+                <div className="pt-2 border-t border-dashed border-ink/10">
+                  <div className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-1">Bebidas / Sobremesas</div>
+                  {escolhasExtrasItens().map((e) => (
+                    <div key={e.item.id} className="flex justify-between text-sm">
+                      <span className="font-semibold">{e.quantidade}x {e.item.nome}</span>
+                      <span className="text-ink/60">R$ {(e.item.preco * e.quantidade).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <label className="text-xs font-bold text-ink/50 uppercase tracking-wide block mb-1">

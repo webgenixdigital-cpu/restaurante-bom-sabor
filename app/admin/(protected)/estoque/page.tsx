@@ -8,10 +8,11 @@ const NOMES: Record<CategoriaId, string> = {
   tamanho: 'Tamanhos', arroz: 'Arroz', feijao: 'Feijão',
   guarnicao: 'Guarnições', salada: 'Saladas', carne: 'Carnes', extra: 'Adicionais',
   massa: 'Massas (pedido avulso)', congelados: 'Congelados (pedido avulso)',
+  bebida: 'Bebidas', sobremesa: 'Sobremesas',
 };
-const ORDEM: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra', 'massa', 'congelados'];
+const ORDEM: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra', 'massa', 'congelados', 'bebida', 'sobremesa'];
 // Só estas categorias têm preço editável; os opcionais da marmita não têm valor adicional
-const COM_PRECO: CategoriaId[] = ['tamanho', 'extra', 'massa', 'congelados'];
+const COM_PRECO: CategoriaId[] = ['tamanho', 'extra', 'massa', 'congelados', 'bebida', 'sobremesa'];
 
 export default function EstoquePage() {
   const supabase = useMemo(() => createClient(), []);

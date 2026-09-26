@@ -1,4 +1,4 @@
-export type CategoriaId = 'tamanho' | 'arroz' | 'feijao' | 'guarnicao' | 'salada' | 'carne' | 'extra' | 'massa' | 'congelados';
+export type CategoriaId = 'tamanho' | 'arroz' | 'feijao' | 'guarnicao' | 'salada' | 'carne' | 'extra' | 'massa' | 'congelados' | 'bebida' | 'sobremesa';
 
 export interface ItemEstoque {
   id: string;
