@@ -18,7 +18,7 @@ const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheir
 
 type Etapa =
   | 'nome' | 'tipoPedido' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
-  | CategoriaId | 'extraCarnes' | 'itensAvulsos' | 'bebidasSobremesas' | 'pagamento' | 'resumo';
+  | CategoriaId | 'extraCarnes' | 'itensAvulsos' | 'bebidasSobremesas' | 'incluirMassa' | 'pagamento' | 'resumo';
 
 export default function CardapioPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -167,8 +167,8 @@ export default function CardapioPage() {
       .filter((e) => e.item && e.quantidade > 0);
   }
 
-  function itensExtrasDisponiveis(): ItemEstoque[] {
-    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || [])];
+    function itensExtrasDisponiveis(): ItemEstoque[] {
+    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || []), ...(itensPorCategoria.massa || [])];
   }
 
   function escolhasExtrasItens(): ItemAvulsoEscolha[] {
@@ -320,8 +320,8 @@ export default function CardapioPage() {
 
         const escolhasExtras = escolhasExtrasItens();
         const extrasTxt = escolhasExtras.length
-          ? `\n\n*Bebidas / Sobremesas:*\n` + escolhasExtras.map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n')
-          : '';
+          ? `\n\n*Itens adicionais:*\n` + escolhasExtras.map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n')
+        : '';
 
         const blocoEntrega = modo === 'entrega'
           ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
@@ -528,6 +528,20 @@ export default function CardapioPage() {
                 mostrarPreco={cat === 'tamanho' || cat === 'extra' || cat === 'carne'}
               />
               {isMulti && <p className="text-xs font-bold text-orange-dark mt-2">{((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas (não é obrigatório escolher todas)</p>}
+              {cat === 'guarnicao' && (itensPorCategoria.massa || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setEtapa('incluirMassa')}
+                  className="w-full mt-3 border-2 border-dashed border-orange text-orange-dark font-bold py-2.5 rounded-xl text-sm hover:bg-orange/5 transition flex items-center justify-center gap-2"
+                >
+                  🍝 Incluir massa
+                  {escolhasExtrasItens().filter((e) => e.item.categoria_id === 'massa').length > 0 && (
+                    <span className="bg-orange text-white text-xs rounded-full px-2 py-0.5">
+                      {escolhasExtrasItens().filter((e) => e.item.categoria_id === 'massa').reduce((s, e) => s + e.quantidade, 0)}
+                    </span>
+                  )}
+                </button>
+              )}
               <Botoes
                 onBack={() => {
                   const idx = ORDEM_CATEGORIAS.indexOf(cat);
@@ -556,7 +570,36 @@ export default function CardapioPage() {
             </Step>
           );
         })()}
-                {etapa === 'extraCarnes' && (() => {
+                {etapa === 'incluirMassa' && (
+          <Step titulo="Incluir massa no pedido">
+            <p className="text-xs text-ink/60 mb-3">Adicione quantas quiser — o valor entra à parte, somado ao total.</p>
+            <div className="flex flex-col gap-2">
+              {(itensPorCategoria.massa || []).map((item) => {
+                const qtd = extrasQuantidades[item.id] || 0;
+                return (
+                  <div key={item.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-cream">
+                    <span className="font-semibold text-sm flex items-center gap-1.5">
+                      {item.emoji} {item.nome}
+                      <span className="text-green-dark font-bold text-xs">R$ {item.preco.toFixed(2)}</span>
+                    </span>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, -1)}>−</button>
+                      <span className="w-5 text-center font-bold">{qtd}</span>
+                      <button className="qtybtn-sm" onClick={() => ajustarQtdExtraItem(item.id, 1)}>+</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {(itensPorCategoria.massa || []).length === 0 && (
+              <p className="text-sm text-ink/60">Nenhuma massa disponível hoje.</p>
+            )}
+            <Botoes onBack={() => setEtapa('guarnicao')} onNext={() => setEtapa('guarnicao')} />
+          </Step>
+        )}
+
+        {etapa === 'extraCarnes' && (() => {
+              
           const tipoExtra = atual.extra as ItemEstoque;
           const carnes = itensPorCategoria.carne || [];
           return (
@@ -703,7 +746,7 @@ export default function CardapioPage() {
                     )}
               {escolhasExtrasItens().length > 0 && (
                 <div className="pt-2 border-t border-dashed border-ink/10">
-                  <div className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-1">Bebidas / Sobremesas</div>
+                  <div className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-1">Itens adicionais</div>
                   {escolhasExtrasItens().map((e) => (
                     <div key={e.item.id} className="flex justify-between text-sm">
                       <span className="font-semibold">{e.quantidade}x {e.item.nome}</span>
