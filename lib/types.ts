@@ -37,6 +37,7 @@ export interface MarmitaConfig {
   tamanho: ItemEstoque;
   arroz: ItemEstoque | null;
   feijao: ItemEstoque | null;
+  massas: ItemEstoque[];
   guarnicoes: ItemEstoque[];
   salada: ItemEstoque | null;
   carne: ItemEstoque | null;

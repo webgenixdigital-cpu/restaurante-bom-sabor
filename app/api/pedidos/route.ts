@@ -51,9 +51,15 @@ export async function POST(req: Request) {
 
     if (erroMarmita || !marmitaSalva) continue;
 
-    if (marmita.guarnicoes?.length) {
+        if (marmita.guarnicoes?.length) {
       await supabase.from('pedido_marmita_guarnicoes').insert(
         marmita.guarnicoes.map((g) => ({ pedido_marmita_id: marmitaSalva.id, item_id: g.id }))
+      );
+    }
+
+    if (marmita.massas?.length) {
+      await supabase.from('pedido_marmita_massas').insert(
+        marmita.massas.map((msa: any) => ({ pedido_marmita_id: marmitaSalva.id, item_id: msa.id }))
       );
     }
 

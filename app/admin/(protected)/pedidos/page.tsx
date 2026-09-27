@@ -79,7 +79,8 @@ export default function PedidosPage() {
           salada:salada_id ( nome ),
           carne:carne_id ( nome ),
           extra:extra_id ( nome ),
-          pedido_marmita_guarnicoes ( itens_estoque ( nome ) ),
+                    pedido_marmita_guarnicoes ( itens_estoque ( nome ) ),
+          pedido_marmita_massas ( itens_estoque ( nome ) ),
           pedido_marmita_extra_carnes ( quantidade, itens_estoque ( nome ) )
         `)
         .eq('pedido_id', id)
@@ -213,8 +214,9 @@ export default function PedidosPage() {
                   )}
                   {carregandoDetalhe[p.id] && <p className="text-ink/40 text-xs">Carregando resumo…</p>}
                   {!carregandoDetalhe[p.id] && (detalhes[p.id] || []).map((m: any) => {
-                    const partes = [
+                                        const partes = [
                       m.arroz?.nome, m.feijao?.nome,
+                      m.pedido_marmita_massas?.length ? `Massa: ${m.pedido_marmita_massas.map((x: any) => x.itens_estoque?.nome).join(' / ')}` : null,
                       m.pedido_marmita_guarnicoes?.length ? m.pedido_marmita_guarnicoes.map((g: any) => g.itens_estoque?.nome).join(' / ') : null,
                       m.salada?.nome, m.carne?.nome,
                     ].filter(Boolean);

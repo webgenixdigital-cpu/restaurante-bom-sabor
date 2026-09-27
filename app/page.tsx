@@ -9,7 +9,7 @@ import RodapeGenix from '@/components/RodapeGenix';
 const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra'];
 const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
   tamanho: 'Escolha o tamanho', arroz: 'Escolha o arroz', feijao: 'Escolha o feijão',
-  guarnicao: 'Escolha até 3 guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
+  guarnicao: 'Escolha as guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
   extra: 'Deseja adicionar carne extra?', massa: '', congelados: '', bebida: '', sobremesa: '',
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
@@ -18,7 +18,7 @@ const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheir
 
 type Etapa =
   | 'nome' | 'tipoPedido' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
-  | CategoriaId | 'extraCarnes' | 'itensAvulsos' | 'bebidasSobremesas' | 'incluirMassa' | 'pagamento' | 'resumo';
+  | CategoriaId | 'desejaMassa' | 'escolherMassa' | 'extraCarnes' | 'itensAvulsos' | 'bebidasSobremesas' | 'pagamento' | 'resumo';
 
 export default function CardapioPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -26,7 +26,7 @@ export default function CardapioPage() {
   const [carregando, setCarregando] = useState(true);
 
   const [nome, setNome] = useState('');
-  const [tipoPedido, setTipoPedido] = useState<'marmita' | 'avulso' | null>(null);
+  const [tipoPedido, setTipoPedido] = useState<'marmita' | 'avulso' | null>('marmita');
   const [modo, setModo] = useState<'retirada' | 'entrega' | null>(null);
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
@@ -36,6 +36,7 @@ export default function CardapioPage() {
   const [pagamento, setPagamento] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [observacoes, setObservacoes] = useState('');
+  const [desejaMassa, setDesejaMassa] = useState<'sim' | 'nao' | null>(null);
 
   const [atual, setAtual] = useState<Partial<Record<CategoriaId, ItemEstoque | ItemEstoque[]>>>({});
   const [extraQuantidades, setExtraQuantidades] = useState<Record<string, number>>({});
@@ -54,14 +55,12 @@ export default function CardapioPage() {
     async function carregar() {
       const hoje = new Date().toISOString().slice(0, 10);
 
-      // Tamanhos sempre disponíveis — não dependem de ativação diária
       const { data: tamanhos } = await supabase
         .from('itens_estoque')
         .select('*')
         .eq('categoria_id', 'tamanho')
         .order('ordem');
 
-      // Demais categorias dependem do que foi ativado para hoje
       const { data } = await supabase
         .from('itens_estoque')
         .select('*, disponibilidade_dia!inner(disponivel, data)')
@@ -74,7 +73,6 @@ export default function CardapioPage() {
         agrupado[item.categoria_id] = agrupado[item.categoria_id] || [];
         agrupado[item.categoria_id].push(item);
       });
-      // ordem alfabética em tudo, exceto tamanho (que segue a ordem crescente de preço/porte)
       Object.keys(agrupado).forEach((cat) => {
         agrupado[cat].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       });
@@ -95,16 +93,31 @@ export default function CardapioPage() {
       const lista = (prev[cat] as ItemEstoque[]) || [];
       const existe = lista.find((i) => i.id === item.id);
       let nova: ItemEstoque[];
-      if (existe) nova = lista.filter((i) => i.id !== item.id);
-      else if (lista.length < QTD_GUARNICOES) nova = [...lista, item];
-      else return prev;
+      if (existe) {
+        nova = lista.filter((i) => i.id !== item.id);
+      } else {
+        let limite = QTD_GUARNICOES;
+        if (cat === 'guarnicao') {
+          const qtdMassas = ((prev.massa as ItemEstoque[]) || []).length;
+          limite = qtdMassas >= 2 ? 0 : qtdMassas === 1 ? 2 : QTD_GUARNICOES;
+        } else if (cat === 'massa') {
+          limite = 10;
+        }
+        if (lista.length >= limite) return prev;
+        nova = [...lista, item];
+      }
       return { ...prev, [cat]: nova };
     });
   }
 
   function proximaCategoria(catual: CategoriaId): Etapa {
     const idx = ORDEM_CATEGORIAS.indexOf(catual);
-    return (ORDEM_CATEGORIAS[idx + 1] as Etapa) || 'pagamento';
+    let proximo = ORDEM_CATEGORIAS[idx + 1];
+    if (proximo === 'guarnicao') {
+      const qtdMassas = ((atual.massa as ItemEstoque[]) || []).length;
+      if (qtdMassas >= 2) proximo = ORDEM_CATEGORIAS[idx + 2];
+    }
+    return (proximo as Etapa) || 'pagamento';
   }
 
   function podeAvancar(cat: CategoriaId): boolean {
@@ -167,8 +180,8 @@ export default function CardapioPage() {
       .filter((e) => e.item && e.quantidade > 0);
   }
 
-    function itensExtrasDisponiveis(): ItemEstoque[] {
-    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || []), ...(itensPorCategoria.massa || [])];
+  function itensExtrasDisponiveis(): ItemEstoque[] {
+    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || [])];
   }
 
   function escolhasExtrasItens(): ItemAvulsoEscolha[] {
@@ -193,6 +206,7 @@ export default function CardapioPage() {
       tamanho: atual.tamanho as ItemEstoque,
       arroz: (atual.arroz as ItemEstoque) || null,
       feijao: (atual.feijao as ItemEstoque) || null,
+      massas: (atual.massa as ItemEstoque[]) || [],
       guarnicoes: (atual.guarnicao as ItemEstoque[]) || [],
       salada: (atual.salada as ItemEstoque) || null,
       carne: (atual.carne as ItemEstoque) || null,
@@ -206,6 +220,7 @@ export default function CardapioPage() {
     if (modoMarmitas === 'diferentes' && novasMarmitas.length < quantidade) {
       setAtual({});
       setExtraQuantidades({});
+      setDesejaMassa(null);
       setEtapa('tamanho');
     } else {
       if (modoMarmitas === 'igual') {
@@ -221,7 +236,8 @@ export default function CardapioPage() {
       : marmitas.reduce((soma, m) => {
           const precoExtra = m.extra ? m.extra.tipo.preco * m.extra.escolhas.reduce((s, e) => s + e.quantidade, 0) : 0;
           const precoCarne = m.carne?.preco || 0;
-          return soma + m.tamanho.preco + precoCarne + precoExtra;
+          const precoMassas = (m.massas || []).reduce((s, msa) => s + msa.preco, 0);
+          return soma + m.tamanho.preco + precoCarne + precoExtra + precoMassas;
         }, 0);
     const extrasTotal = escolhasExtrasItens().reduce((s, e) => s + e.item.preco * e.quantidade, 0);
     return baseTotal + extrasTotal;
@@ -231,6 +247,7 @@ export default function CardapioPage() {
     const partes = [
       m.arroz?.nome,
       m.feijao?.nome,
+      m.massas && m.massas.length ? `Massa: ${m.massas.map((x) => x.nome).join(' / ')}` : null,
       m.guarnicoes.length ? m.guarnicoes.map((g) => g.nome).join(' / ') : null,
       m.salada?.nome,
       m.carne?.nome,
@@ -248,6 +265,7 @@ export default function CardapioPage() {
     const linhas: string[] = [];
     if (m.arroz) linhas.push(`• Arroz: ${m.arroz.nome}`);
     if (m.feijao) linhas.push(`• Feijão: ${m.feijao.nome}`);
+    if (m.massas?.length) linhas.push(`• Massa: ${m.massas.map((x) => x.nome).join(', ')}`);
     if (m.guarnicoes.length) linhas.push(`• Guarnições: ${m.guarnicoes.map((g) => g.nome).join(', ')}`);
     if (m.salada) linhas.push(`• Salada: ${m.salada.nome}`);
     if (m.carne) linhas.push(`• Carne: ${m.carne.nome}`);
@@ -321,7 +339,7 @@ export default function CardapioPage() {
         const escolhasExtras = escolhasExtrasItens();
         const extrasTxt = escolhasExtras.length
           ? `\n\n*Itens adicionais:*\n` + escolhasExtras.map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n')
-        : '';
+          : '';
 
         const blocoEntrega = modo === 'entrega'
           ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
@@ -378,21 +396,7 @@ export default function CardapioPage() {
               massa, com valor diferenciado — consulte pelo WhatsApp.
             </div>
             <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
-            <Botoes onNext={() => setEtapa('tipoPedido')} disabled={nome.trim().length < 2} />
-          </Step>
-        )}
-
-        {etapa === 'tipoPedido' && (
-          <Step titulo="O que você quer pedir?">
-            <Opcoes
-              itens={[
-                { id: 'marmita', nome: '🍱 Marmita completa' } as any,
-                { id: 'avulso', nome: '🍝 Massas / Congelados avulsos' } as any,
-              ]}
-              selecionado={tipoPedido ? [{ id: tipoPedido } as any] : []}
-              onSelect={(i) => setTipoPedido(i.id as any)}
-            />
-            <Botoes onBack={() => setEtapa('nome')} onNext={() => setEtapa('modo')} disabled={!tipoPedido} />
+            <Botoes onNext={() => setEtapa('modo')} disabled={nome.trim().length < 2} />
           </Step>
         )}
 
@@ -404,8 +408,8 @@ export default function CardapioPage() {
               onSelect={(i) => setModo(i.id as any)}
             />
             <Botoes
-              onBack={() => setEtapa('tipoPedido')}
-              onNext={() => setEtapa(modo === 'entrega' ? 'endereco' : (tipoPedido === 'avulso' ? 'itensAvulsos' : 'quantidade'))}
+              onBack={() => setEtapa('nome')}
+              onNext={() => setEtapa(modo === 'entrega' ? 'endereco' : 'quantidade')}
               disabled={!modo}
             />
           </Step>
@@ -433,54 +437,8 @@ export default function CardapioPage() {
             </p>
             <Botoes
               onBack={() => setEtapa('modo')}
-              onNext={() => setEtapa(tipoPedido === 'avulso' ? 'itensAvulsos' : 'quantidade')}
+              onNext={() => setEtapa('quantidade')}
               disabled={!enderecoValido}
-            />
-          </Step>
-        )}
-
-        {etapa === 'itensAvulsos' && (
-          <Step titulo="Escolha as massas/congelados">
-            {['massa', 'congelados'].map((cat) => {
-              const itens = itensPorCategoria[cat] || [];
-              if (itens.length === 0) return null;
-              return (
-                <div key={cat} className="mb-4">
-                  <p className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-2">
-                    {cat === 'massa' ? 'Massas' : 'Congelados'}
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {itens.map((item) => {
-                      const qtd = avulsoQuantidades[item.id] || 0;
-                      return (
-                        <div key={item.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-cream">
-                          <span className="font-semibold text-sm flex items-center gap-1.5">
-                            {item.emoji} {item.nome}
-                            {item.vegetariano && <span title="Vegetariano">🌱</span>}
-                            {item.preco > 0 && <span className="text-green-dark font-bold text-xs">R$ {item.preco.toFixed(2)}</span>}
-                          </span>
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            <button className="qtybtn-sm" onClick={() => ajustarQtdAvulso(item.id, -1)}>−</button>
-                            <span className="w-5 text-center font-bold">{qtd}</span>
-                            <button className="qtybtn-sm" onClick={() => ajustarQtdAvulso(item.id, 1)}>+</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-            {itensAvulsosDisponiveis().length === 0 && (
-              <p className="text-sm text-ink/60">Nenhuma massa ou congelado disponível hoje.</p>
-            )}
-            {totalUnidadesAvulso() > 0 && (
-              <p className="text-sm font-bold text-green-dark mt-1 text-right">Subtotal: R$ {total.toFixed(2)}</p>
-            )}
-            <Botoes
-              onBack={() => setEtapa(modo === 'entrega' ? 'endereco' : 'modo')}
-              onNext={() => setEtapa('bebidasSobremesas')}
-              disabled={totalUnidadesAvulso() === 0}
             />
           </Step>
         )}
@@ -511,10 +469,63 @@ export default function CardapioPage() {
           </Step>
         )}
 
-        {ORDEM_CATEGORIAS.includes(etapa as CategoriaId) && (() => {
+        {etapa === 'desejaMassa' && (
+          <Step titulo="Deseja incluir massa nesta marmita?">
+            {modoMarmitas === 'diferentes' && quantidade > 1 && (
+              <p className="text-xs font-bold text-orange-dark mb-2">Marmita {marmitas.length + 1} de {quantidade}</p>
+            )}
+            <p className="text-xs text-ink/60 mb-3">
+              Escolhendo massa: 1 tipo reduz o limite de guarnições pra 2; 2 tipos ou mais bloqueiam guarnições nesta marmita.
+            </p>
+            <Opcoes
+              itens={[{ id: 'sim', nome: '🍝 Sim, quero massa' } as any, { id: 'nao', nome: '➡️ Não, seguir sem massa' } as any]}
+              selecionado={desejaMassa ? [{ id: desejaMassa } as any] : []}
+              onSelect={(i) => setDesejaMassa(i.id as any)}
+            />
+            <Botoes
+              onBack={() => {
+                const idx = ORDEM_CATEGORIAS.indexOf('tamanho');
+                if (idx === 0) setEtapa(quantidade > 1 ? 'modoMarmitas' : 'quantidade');
+                else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
+              }}
+              onNext={() => setEtapa(desejaMassa === 'sim' ? 'escolherMassa' : 'arroz')}
+              disabled={!desejaMassa}
+            />
+          </Step>
+        )}
+
+        {etapa === 'escolherMassa' && (() => {
+          const massasSelecionadas = (atual.massa as ItemEstoque[]) || [];
+          return (
+            <Step titulo="Quais massas?">
+              <p className="text-xs text-ink/60 mb-3">Toque pra marcar quantas quiser.</p>
+              <Opcoes
+                itens={itensPorCategoria.massa || []}
+                selecionado={massasSelecionadas}
+                onSelect={(i) => alternarMulti('massa', i)}
+                mostrarPreco
+              />
+              {(itensPorCategoria.massa || []).length === 0 && (
+                <p className="text-sm text-ink/60">Nenhuma massa disponível hoje.</p>
+              )}
+              {massasSelecionadas.length >= 2 && (
+                <p className="text-xs font-bold text-red-600 bg-red-50 rounded-lg p-2 mt-3">
+                  ⚠️ Com 2 ou mais massas, as guarnições ficam bloqueadas nesta marmita — o pedido segue direto pra salada.
+                </p>
+              )}
+              {massasSelecionadas.length === 1 && (
+                <p className="text-xs text-orange-dark font-semibold mt-3">Com 1 massa, o limite de guarnições cai pra 2.</p>
+              )}
+              <Botoes onBack={() => setEtapa('desejaMassa')} onNext={() => setEtapa('arroz')} />
+            </Step>
+          );
+        })()}
+                {ORDEM_CATEGORIAS.includes(etapa as CategoriaId) && (() => {
           const cat = etapa as CategoriaId;
           const itens = itensPorCategoria[cat] || [];
           const isMulti = cat === 'guarnicao';
+          const qtdMassasAtual = ((atual.massa as ItemEstoque[]) || []).length;
+          const limiteGuarnicoes = qtdMassasAtual >= 2 ? 0 : qtdMassasAtual === 1 ? 2 : QTD_GUARNICOES;
           return (
             <Step titulo={NOMES_CATEGORIAS[cat]}>
               {modoMarmitas === 'diferentes' && quantidade > 1 && (
@@ -527,29 +538,31 @@ export default function CardapioPage() {
                 onSelect={(i) => (isMulti ? alternarMulti(cat, i) : selecionarUnica(cat, i))}
                 mostrarPreco={cat === 'tamanho' || cat === 'extra' || cat === 'carne'}
               />
-              {isMulti && <p className="text-xs font-bold text-orange-dark mt-2">{((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas (não é obrigatório escolher todas)</p>}
-              {cat === 'guarnicao' && (itensPorCategoria.massa || []).length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setEtapa('incluirMassa')}
-                  className="w-full mt-3 border-2 border-dashed border-orange text-orange-dark font-bold py-2.5 rounded-xl text-sm hover:bg-orange/5 transition flex items-center justify-center gap-2"
-                >
-                  🍝 Incluir massa
-                  {escolhasExtrasItens().filter((e) => e.item.categoria_id === 'massa').length > 0 && (
-                    <span className="bg-orange text-white text-xs rounded-full px-2 py-0.5">
-                      {escolhasExtrasItens().filter((e) => e.item.categoria_id === 'massa').reduce((s, e) => s + e.quantidade, 0)}
-                    </span>
-                  )}
-                </button>
+              {isMulti && (
+                limiteGuarnicoes === 0 ? (
+                  <p className="text-xs font-bold text-red-600 bg-red-50 rounded-lg p-2 mt-2">
+                    🚫 Guarnições bloqueadas nesta marmita — você escolheu 2 ou mais massas.
+                  </p>
+                ) : (
+                  <p className="text-xs font-bold text-orange-dark mt-2">
+                    {((atual.guarnicao as ItemEstoque[]) || []).length} de {limiteGuarnicoes} selecionadas (não é obrigatório escolher todas)
+                    {limiteGuarnicoes < QTD_GUARNICOES && ' — limite reduzido por causa da massa escolhida'}
+                  </p>
+                )
               )}
               <Botoes
                 onBack={() => {
                   const idx = ORDEM_CATEGORIAS.indexOf(cat);
                   if (idx === 0) setEtapa(quantidade > 1 ? 'modoMarmitas' : 'quantidade');
+                  else if (cat === 'arroz') setEtapa('desejaMassa');
                   else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
                 }}
                 onSkip={PULAVEL[cat] ? () => pularEtapa(cat) : undefined}
                 onNext={() => {
+                  if (cat === 'tamanho') {
+                    setEtapa('desejaMassa');
+                    return;
+                  }
                   if (cat === 'extra') {
                     const sel = atual.extra as ItemEstoque | undefined;
                     if (sel && sel.preco > 0) setEtapa('extraCarnes');
@@ -570,39 +583,8 @@ export default function CardapioPage() {
             </Step>
           );
         })()}
-                {etapa === 'incluirMassa' && (
-          <Step titulo="Incluir massa no pedido">
-            <p className="text-xs text-ink/60 mb-3">Adicione quantas quiser — o valor entra à parte, somado ao total.</p>
-                        <div className="flex flex-col gap-2">
-              {(itensPorCategoria.massa || []).map((item) => {
-                const selecionada = (extrasQuantidades[item.id] || 0) > 0;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setExtrasQuantidades((prev) => {
-                      const copia = { ...prev };
-                      if (selecionada) delete copia[item.id];
-                      else copia[item.id] = 1;
-                      return copia;
-                    })}
-                    className={`w-full flex justify-between items-center px-4 py-3 rounded-xl border-2 text-left ${selecionada ? 'border-green bg-cream-2' : 'border-transparent bg-cream'}`}
-                  >
-                    <span className="font-semibold text-sm">{item.emoji} {item.nome}</span>
-                    <span className="text-green-dark font-bold text-sm">R$ {item.preco.toFixed(2)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {(itensPorCategoria.massa || []).length === 0 && (
-              <p className="text-sm text-ink/60">Nenhuma massa disponível hoje.</p>
-            )}
-            <Botoes onBack={() => setEtapa('guarnicao')} onNext={() => setEtapa('guarnicao')} />
-          </Step>
-        )}
 
         {etapa === 'extraCarnes' && (() => {
-              
           const tipoExtra = atual.extra as ItemEstoque;
           const carnes = itensPorCategoria.carne || [];
           return (
@@ -722,31 +704,24 @@ export default function CardapioPage() {
               {modo === 'entrega' && <SummaryLine k="Rua" v={rua} />}
               {modo === 'entrega' && <SummaryLine k="Número" v={numero} />}
               {modo === 'entrega' && <SummaryLine k="Bairro" v={bairro} />}
-              {tipoPedido === 'marmita' && <SummaryLine k="Quantidade" v={`${quantidade} marmita(s)`} />}
+              <SummaryLine k="Quantidade" v={`${quantidade} marmita(s)`} />
               <SummaryLine k="Pagamento" v={PAGAMENTO_LABEL[pagamento || ''] || ''} />
             </div>
 
             <div className="bg-cream rounded-xl p-3 mb-4 space-y-3">
-              {tipoPedido === 'avulso'
-                ? escolhasAvulsas().map((e) => (
-                    <div key={e.item.id} className="flex justify-between text-sm">
-                      <span className="font-bold text-green-dark">{e.quantidade}x {e.item.nome}</span>
-                      {e.item.preco > 0 && <span className="text-ink/60">R$ {(e.item.preco * e.quantidade).toFixed(2)}</span>}
+              {modoMarmitas === 'diferentes'
+                ? marmitas.map((m) => (
+                    <div key={m.numero} className="text-sm">
+                      <div className="font-bold text-green-dark">Marmita {m.numero} — {m.tamanho.nome}</div>
+                      <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(m)}</div>
                     </div>
                   ))
-                : modoMarmitas === 'diferentes'
-                  ? marmitas.map((m) => (
-                      <div key={m.numero} className="text-sm">
-                        <div className="font-bold text-green-dark">Marmita {m.numero} — {m.tamanho.nome}</div>
-                        <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(m)}</div>
-                      </div>
-                    ))
-                  : marmitas[0] && (
-                      <div className="text-sm">
-                        <div className="font-bold text-green-dark">{marmitas[0].tamanho.nome} × {quantidade}</div>
-                        <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(marmitas[0])}</div>
-                      </div>
-                    )}
+                : marmitas[0] && (
+                    <div className="text-sm">
+                      <div className="font-bold text-green-dark">{marmitas[0].tamanho.nome} × {quantidade}</div>
+                      <div className="text-ink/70 text-xs mt-0.5">{descreverMarmita(marmitas[0])}</div>
+                    </div>
+                  )}
               {escolhasExtrasItens().length > 0 && (
                 <div className="pt-2 border-t border-dashed border-ink/10">
                   <div className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-1">Itens adicionais</div>

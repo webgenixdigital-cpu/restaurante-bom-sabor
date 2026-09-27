@@ -37,8 +37,11 @@ export default function ImprimirClient({
       {marmitas.map((m: any) => (
         <div key={m.numero} className="mb-2">
           <div className="font-extrabold">Marmita {m.numero} — {m.tamanho?.nome}</div>
-          {m.arroz?.nome && <div>Arroz: {m.arroz.nome}</div>}
+                    {m.arroz?.nome && <div>Arroz: {m.arroz.nome}</div>}
           {m.feijao?.nome && <div>Feijão: {m.feijao.nome}</div>}
+          {m.pedido_marmita_massas?.length > 0 && (
+            <div>Massa: {m.pedido_marmita_massas.map((x: any) => x.itens_estoque?.nome).join(', ')}</div>
+          )}
           {m.pedido_marmita_guarnicoes?.length > 0 && (
             <div>Guarn.: {m.pedido_marmita_guarnicoes.map((g: any) => g.itens_estoque?.nome).join(', ')}</div>
           )}
