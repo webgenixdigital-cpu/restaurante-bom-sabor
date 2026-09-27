@@ -88,36 +88,21 @@ export default function CardapioPage() {
     setAtual((prev) => ({ ...prev, [cat]: item }));
   }
 
-  function alternarMulti(cat: CategoriaId, item: ItemEstoque) {
+    function alternarMulti(cat: CategoriaId, item: ItemEstoque) {
     setAtual((prev) => {
       const lista = (prev[cat] as ItemEstoque[]) || [];
       const existe = lista.find((i) => i.id === item.id);
       let nova: ItemEstoque[];
-      if (existe) {
-        nova = lista.filter((i) => i.id !== item.id);
-      } else {
-        let limite = QTD_GUARNICOES;
-        if (cat === 'guarnicao') {
-          const qtdMassas = ((prev.massa as ItemEstoque[]) || []).length;
-          limite = qtdMassas >= 2 ? 0 : qtdMassas === 1 ? 2 : QTD_GUARNICOES;
-        } else if (cat === 'massa') {
-          limite = 10;
-        }
-        if (lista.length >= limite) return prev;
-        nova = [...lista, item];
-      }
+      if (existe) nova = lista.filter((i) => i.id !== item.id);
+      else if (lista.length < QTD_GUARNICOES) nova = [...lista, item];
+      else return prev;
       return { ...prev, [cat]: nova };
     });
   }
 
-  function proximaCategoria(catual: CategoriaId): Etapa {
+    function proximaCategoria(catual: CategoriaId): Etapa {
     const idx = ORDEM_CATEGORIAS.indexOf(catual);
-    let proximo = ORDEM_CATEGORIAS[idx + 1];
-    if (proximo === 'guarnicao') {
-      const qtdMassas = ((atual.massa as ItemEstoque[]) || []).length;
-      if (qtdMassas >= 2) proximo = ORDEM_CATEGORIAS[idx + 2];
-    }
-    return (proximo as Etapa) || 'pagamento';
+    return (ORDEM_CATEGORIAS[idx + 1] as Etapa) || 'pagamento';
   }
 
   function podeAvancar(cat: CategoriaId): boolean {
@@ -206,7 +191,7 @@ export default function CardapioPage() {
       tamanho: atual.tamanho as ItemEstoque,
       arroz: (atual.arroz as ItemEstoque) || null,
       feijao: (atual.feijao as ItemEstoque) || null,
-      massas: (atual.massa as ItemEstoque[]) || [],
+            massas: atual.massa ? [atual.massa as ItemEstoque] : [],
       guarnicoes: (atual.guarnicao as ItemEstoque[]) || [],
       salada: (atual.salada as ItemEstoque) || null,
       carne: (atual.carne as ItemEstoque) || null,
@@ -494,38 +479,28 @@ export default function CardapioPage() {
           </Step>
         )}
 
-        {etapa === 'escolherMassa' && (() => {
-          const massasSelecionadas = (atual.massa as ItemEstoque[]) || [];
-          return (
-            <Step titulo="Quais massas?">
-              <p className="text-xs text-ink/60 mb-3">Toque pra marcar quantas quiser.</p>
-              <Opcoes
-                itens={itensPorCategoria.massa || []}
-                selecionado={massasSelecionadas}
-                onSelect={(i) => alternarMulti('massa', i)}
-                mostrarPreco
-              />
-              {(itensPorCategoria.massa || []).length === 0 && (
-                <p className="text-sm text-ink/60">Nenhuma massa disponível hoje.</p>
-              )}
-              {massasSelecionadas.length >= 2 && (
-                <p className="text-xs font-bold text-red-600 bg-red-50 rounded-lg p-2 mt-3">
-                  ⚠️ Com 2 ou mais massas, as guarnições ficam bloqueadas nesta marmita — o pedido segue direto pra salada.
-                </p>
-              )}
-              {massasSelecionadas.length === 1 && (
-                <p className="text-xs text-orange-dark font-semibold mt-3">Com 1 massa, o limite de guarnições cai pra 2.</p>
-              )}
-              <Botoes onBack={() => setEtapa('desejaMassa')} onNext={() => setEtapa('arroz')} />
-            </Step>
-          );
-        })()}
-                {ORDEM_CATEGORIAS.includes(etapa as CategoriaId) && (() => {
+                {etapa === 'escolherMassa' && (
+          <Step titulo="Qual massa?">
+            <Opcoes
+              itens={itensPorCategoria.massa || []}
+              selecionado={atual.massa ? [atual.massa as ItemEstoque] : []}
+              onSelect={(i) => selecionarUnica('massa', i)}
+              mostrarPreco
+            />
+            {(itensPorCategoria.massa || []).length === 0 && (
+              <p className="text-sm text-ink/60">Nenhuma massa disponível hoje.</p>
+            )}
+            <Botoes
+              onBack={() => setEtapa('desejaMassa')}
+              onNext={() => setEtapa('arroz')}
+              disabled={!atual.massa}
+            />
+          </Step>
+        )}
+        {ORDEM_CATEGORIAS.includes(etapa as CategoriaId) && (() => {
           const cat = etapa as CategoriaId;
           const itens = itensPorCategoria[cat] || [];
           const isMulti = cat === 'guarnicao';
-          const qtdMassasAtual = ((atual.massa as ItemEstoque[]) || []).length;
-          const limiteGuarnicoes = qtdMassasAtual >= 2 ? 0 : qtdMassasAtual === 1 ? 2 : QTD_GUARNICOES;
           return (
             <Step titulo={NOMES_CATEGORIAS[cat]}>
               {modoMarmitas === 'diferentes' && quantidade > 1 && (
@@ -538,17 +513,10 @@ export default function CardapioPage() {
                 onSelect={(i) => (isMulti ? alternarMulti(cat, i) : selecionarUnica(cat, i))}
                 mostrarPreco={cat === 'tamanho' || cat === 'extra' || cat === 'carne'}
               />
-              {isMulti && (
-                limiteGuarnicoes === 0 ? (
-                  <p className="text-xs font-bold text-red-600 bg-red-50 rounded-lg p-2 mt-2">
-                    🚫 Guarnições bloqueadas nesta marmita — você escolheu 2 ou mais massas.
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-orange-dark mt-2">
-                    {((atual.guarnicao as ItemEstoque[]) || []).length} de {limiteGuarnicoes} selecionadas (não é obrigatório escolher todas)
-                    {limiteGuarnicoes < QTD_GUARNICOES && ' — limite reduzido por causa da massa escolhida'}
-                  </p>
-                )
+                            {isMulti && (
+                <p className="text-xs font-bold text-orange-dark mt-2">
+                  {((atual.guarnicao as ItemEstoque[]) || []).length} de {QTD_GUARNICOES} selecionadas (não é obrigatório escolher todas)
+                </p>
               )}
               <Botoes
                 onBack={() => {
