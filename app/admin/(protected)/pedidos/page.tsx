@@ -14,7 +14,7 @@ const STATUS_COR: Record<Pedido['status'], string> = {
 };
 
 function diaDe(dataIso: string) {
-  return dataIso.slice(0, 10);
+  return new Date(dataIso).toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso local
 }
 function formatarDia(diaIso: string) {
   const [ano, mes, dia] = diaIso.split('-');
@@ -33,11 +33,12 @@ export default function PedidosPage() {
   const [carregandoDetalhe, setCarregandoDetalhe] = useState<Record<string, boolean>>({});
   const [taxasEditando, setTaxasEditando] = useState<Record<string, string>>({});
 
-  const hojeStr = new Date().toISOString().slice(0, 10);
+    const hojeStr = new Date().toLocaleDateString('sv-SE');
 
   useEffect(() => {
     async function carregar() {
-      const { data } = await supabase.from('pedidos').select('*').order('created_at', { ascending: false }).limit(200);
+      const { data } = await supabase.from('pedidos').select('*').order('created_at', { ascending: false }).limit(5000);
+      
       setPedidos(data || []);
     }
     carregar();
@@ -90,40 +91,19 @@ export default function PedidosPage() {
     }
   }
 
-  // Dashboard: sempre reflete HOJE, independente do filtro da lista abaixo
-  const pedidosHoje = pedidos.filter((p) => diaDe(p.created_at) === hojeStr);
-  const pedidosHojeValidos = pedidosHoje.filter((p) => p.status !== 'cancelado');
-  const faturamentoHoje = pedidosHojeValidos.reduce((s, p) => s + totalComTaxa(p), 0);
-  const entregasHoje = pedidosHojeValidos.filter((p) => p.modo === 'entrega').length;
-  const retiradasHoje = pedidosHojeValidos.filter((p) => p.modo === 'retirada').length;
-
-  const diasDisponiveis = Array.from(new Set([hojeStr, ...pedidos.map((p) => diaDe(p.created_at))])).sort((a, b) => b.localeCompare(a));
+   const diasDisponiveis = Array.from(new Set([hojeStr, ...pedidos.map((p) => diaDe(p.created_at))])).sort((a, b) => b.localeCompare(a));
   const pedidosFiltrados = diaSelecionado === 'todos' ? pedidos : pedidos.filter((p) => diaDe(p.created_at) === diaSelecionado);
+
+  // Dashboard: acompanha o filtro escolhido (um dia específico ou todos os dias)
+  const pedidosValidos = pedidosFiltrados.filter((p) => p.status !== 'cancelado');
+  const faturamento = pedidosValidos.reduce((s, p) => s + totalComTaxa(p), 0);
+  const entregas = pedidosValidos.filter((p) => p.modo === 'entrega').length;
+  const retiradas = pedidosValidos.filter((p) => p.modo === 'retirada').length;
+  const rotuloPeriodo = diaSelecionado === 'todos' ? 'no total' : diaSelecionado === hojeStr ? 'hoje' : `em ${formatarDia(diaSelecionado)}`;
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-lg sm:text-xl font-bold text-green-dark mb-4">Pedidos</h1>
-
-      {/* Dashboard fixo — sempre do dia de hoje */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6">
-        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
-          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">{pedidosHojeValidos.length}</div>
-          <div className="text-xs text-ink/50 font-semibold">Pedidos hoje</div>
-        </div>
-        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
-          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">R$ {faturamentoHoje.toFixed(2)}</div>
-          <div className="text-xs text-ink/50 font-semibold">Faturamento estimado</div>
-        </div>
-        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
-          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{entregasHoje}</div>
-          <div className="text-xs text-ink/50 font-semibold">Entregas</div>
-        </div>
-        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
-          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{retiradasHoje}</div>
-          <div className="text-xs text-ink/50 font-semibold">Retiradas</div>
-        </div>
-      </div>
-      <p className="text-xs text-ink/40 -mt-4 mb-5">Faturamento inclui as taxas de entrega lançadas e não conta pedidos cancelados.</p>
+           <h1 className="text-lg sm:text-xl font-bold text-green-dark mb-4">Pedidos</h1>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <span className="text-sm font-semibold text-ink/60">Filtrar por dia</span>
@@ -138,6 +118,29 @@ export default function PedidosPage() {
           ))}
         </select>
       </div>
+
+      {/* Dashboard: acompanha o filtro escolhido */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-2">
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">{pedidosValidos.length}</div>
+          <div className="text-xs text-ink/50 font-semibold">Pedidos {rotuloPeriodo}</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-green-dark">R$ {faturamento.toFixed(2)}</div>
+          <div className="text-xs text-ink/50 font-semibold">Faturamento {rotuloPeriodo}</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{entregas}</div>
+          <div className="text-xs text-ink/50 font-semibold">Entregas</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow p-3 sm:p-4">
+          <div className="text-xl sm:text-2xl font-extrabold text-orange-dark">{retiradas}</div>
+          <div className="text-xs text-ink/50 font-semibold">Retiradas</div>
+        </div>
+      </div>
+      <p className="text-xs text-ink/40 mb-5">
+        Valores {diaSelecionado === 'todos' ? 'somados de todos os dias' : `de ${formatarDia(diaSelecionado)}`}. O faturamento inclui as taxas de entrega lançadas e não conta pedidos cancelados.
+      </p>
 
       <div className="flex flex-col gap-3">
         {pedidosFiltrados.length === 0 && <p className="text-ink/40 text-sm">Nenhum pedido neste dia.</p>}
