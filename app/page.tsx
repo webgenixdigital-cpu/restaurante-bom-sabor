@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { CategoriaId, ItemEstoque, MarmitaConfig, ExtraCarneEscolha, ItemAvulsoEscolha } from '@/lib/types';
+import type { Categoria, CategoriaId, ItemEstoque, MarmitaConfig, ExtraCarneEscolha, ItemAvulsoEscolha } from '@/lib/types';
 import Capa from '@/components/Capa';
 import RodapeGenix from '@/components/RodapeGenix';
+
 
 const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra'];
 const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
   tamanho: 'Escolha o tamanho', arroz: 'Escolha o arroz', feijao: 'Escolha o feijão',
   guarnicao: 'Escolha as guarnições', salada: 'Escolha a salada', carne: 'Escolha a carne',
-  extra: 'Deseja adicionar carne extra?', massa: '', congelados: '', bebida: '', sobremesa: '',
+  extra: 'Deseja adicionar carne extra?', massa: '', bebida: '', sobremesa: '',
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
@@ -24,6 +25,7 @@ export default function CardapioPage() {
   const supabase = useMemo(() => createClient(), []);
   const [itensPorCategoria, setItensPorCategoria] = useState<Record<string, ItemEstoque[]>>({});
   const [carregando, setCarregando] = useState(true);
+  const [categoriasExtras, setCategoriasExtras] = useState<Categoria[]>([]);
 
   const [nome, setNome] = useState('');
   const [tipoPedido, setTipoPedido] = useState<'marmita' | 'avulso' | null>('marmita');
@@ -51,19 +53,21 @@ export default function CardapioPage() {
   const endereco = `${rua.trim()}, ${numero.trim()} - ${bairro.trim()}`;
   const enderecoValido = rua.trim().length >= 3 && numero.trim().length >= 1 && bairro.trim().length >= 2;
 
-  useEffect(() => {
+    useEffect(() => {
     async function carregar() {
       const hoje = new Date().toISOString().slice(0, 10);
 
       const { data: tamanhos } = await supabase
         .from('itens_estoque')
         .select('*')
+        .eq('ativo_cadastro', true)
         .eq('categoria_id', 'tamanho')
         .order('ordem');
 
       const { data } = await supabase
         .from('itens_estoque')
         .select('*, disponibilidade_dia!inner(disponivel, data)')
+        .eq('ativo_cadastro', true)
         .neq('categoria_id', 'tamanho')
         .eq('disponibilidade_dia.data', hoje)
         .eq('disponibilidade_dia.disponivel', true);
@@ -77,6 +81,10 @@ export default function CardapioPage() {
         agrupado[cat].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       });
       agrupado.tamanho = tamanhos || [];
+
+      const respCats = await fetch('/api/categorias');
+      const cats: Categoria[] = respCats.ok ? await respCats.json() : [];
+      setCategoriasExtras(cats.filter((c) => c.contexto === 'avulso' && c.id !== 'massa'));
 
       setItensPorCategoria(agrupado);
       setCarregando(false);
@@ -155,8 +163,8 @@ export default function CardapioPage() {
   }
 
   function itensAvulsosDisponiveis(): ItemEstoque[] {
-    return [...(itensPorCategoria.massa || []), ...(itensPorCategoria.congelados || [])];
-  }
+  return itensPorCategoria.massa || [];
+}
 
   function escolhasAvulsas(): ItemAvulsoEscolha[] {
     const disponiveis = itensAvulsosDisponiveis();
@@ -166,8 +174,8 @@ export default function CardapioPage() {
   }
 
   function itensExtrasDisponiveis(): ItemEstoque[] {
-    return [...(itensPorCategoria.bebida || []), ...(itensPorCategoria.sobremesa || [])];
-  }
+  return categoriasExtras.flatMap((c) => itensPorCategoria[c.id] || []);
+}
 
   function escolhasExtrasItens(): ItemAvulsoEscolha[] {
     const disponiveis = itensExtrasDisponiveis();
@@ -314,7 +322,7 @@ export default function CardapioPage() {
 
         let itensTxt = '';
         if (tipoPedido === 'avulso') {
-          itensTxt = `*Massas / Congelados:*\n` + escolhasAvulsas().map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n');
+          itensTxt = `*Massas:*\n` + escolhasAvulsas().map((e) => `• ${e.quantidade}x ${e.item.nome}`).join('\n');
         } else if (modoMarmitas === 'diferentes') {
           itensTxt = marmitas.map((m) => `*Marmita ${m.numero} — ${m.tamanho.nome}*\n${detalharMarmitaWhats(m)}`).join('\n\n');
         } else if (marmitas[0]) {
@@ -591,16 +599,16 @@ export default function CardapioPage() {
         })()}
 
         {etapa === 'bebidasSobremesas' && (
-          <Step titulo="Quer bebida ou sobremesa?">
+          <Step titulo="Quer adicionar algo mais?">
             <p className="text-xs text-ink/60 mb-3">Opcional — só some ao total se você escolher algo.</p>
-            {['bebida', 'sobremesa'].map((cat) => {
-              const itens = itensPorCategoria[cat] || [];
-              if (itens.length === 0) return null;
-              return (
-                <div key={cat} className="mb-4">
-                  <p className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-2">
-                    {cat === 'bebida' ? 'Bebidas' : 'Sobremesas'}
-                  </p>
+            {categoriasExtras.map((c) => {
+  const itens = itensPorCategoria[c.id] || [];
+  if (itens.length === 0) return null;
+  return (
+    <div key={c.id} className="mb-4">
+      <p className="text-xs font-bold text-orange-dark uppercase tracking-wide mb-2">
+        {c.nome}
+      </p>
                   <div className="flex flex-col gap-2">
                     {itens.map((item) => {
                       const qtd = extrasQuantidades[item.id] || 0;
@@ -623,11 +631,11 @@ export default function CardapioPage() {
               );
             })}
             {itensExtrasDisponiveis().length === 0 && (
-              <p className="text-sm text-ink/60">Nenhuma bebida ou sobremesa disponível hoje.</p>
+              <p className="text-sm text-ink/60">Nenhum item adicional disponível hoje.</p>
             )}
             {escolhasExtrasItens().length > 0 && (
               <p className="text-sm font-bold text-green-dark mt-1 text-right">
-                Subtotal bebidas/sobremesas: R$ {escolhasExtrasItens().reduce((s, e) => s + e.item.preco * e.quantidade, 0).toFixed(2)}
+                Subtotal adicionais: R$ {escolhasExtrasItens().reduce((s, e) => s + e.item.preco * e.quantidade, 0).toFixed(2)}
               </p>
             )}
             <Botoes onNext={() => setEtapa('pagamento')} />

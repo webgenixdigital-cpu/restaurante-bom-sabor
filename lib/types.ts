@@ -1,4 +1,17 @@
-export type CategoriaId = 'tamanho' | 'arroz' | 'feijao' | 'guarnicao' | 'salada' | 'carne' | 'extra' | 'massa' | 'congelados' | 'bebida' | 'sobremesa';
+// Categorias agora vêm do banco; os ids fixos continuam válidos
+export type CategoriaId = string;
+
+export interface Categoria {
+  id: string;
+  nome: string;
+  tipo_selecao: 'unica' | 'multipla';
+  qtd_obrigatoria: number | null;
+  ordem: number;
+  ativo: boolean;
+  sistema: boolean;
+  contexto: 'marmita' | 'avulso';
+  tem_preco: boolean;
+}
 
 export interface ItemEstoque {
   id: string;

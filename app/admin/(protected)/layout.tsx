@@ -33,6 +33,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           >
             Cardápio do dia
           </Link>
+          <Link
+  href="/admin/cardapio"
+  className="bg-white/10 hover:bg-white/20 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition"
+>
+  Gerenciar cardápio
+</Link>
           <a
             href="https://portal.ifood.com.br/"
             target="_blank"

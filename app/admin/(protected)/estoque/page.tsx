@@ -2,21 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { CategoriaId, ItemEstoque } from '@/lib/types';
-
-const NOMES: Record<CategoriaId, string> = {
-  tamanho: 'Tamanhos', arroz: 'Arroz', feijao: 'Feijão',
-  guarnicao: 'Guarnições', salada: 'Saladas', carne: 'Carnes', extra: 'Adicionais',
-  massa: 'Massas (pedido avulso)', congelados: 'Congelados (pedido avulso)',
-  bebida: 'Bebidas', sobremesa: 'Sobremesas',
-};
-const ORDEM: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra', 'massa', 'congelados', 'bebida', 'sobremesa'];
-// Só estas categorias têm preço editável; os opcionais da marmita não têm valor adicional
-const COM_PRECO: CategoriaId[] = ['tamanho', 'extra', 'massa', 'congelados', 'bebida', 'sobremesa'];
+import type { Categoria, ItemEstoque } from '@/lib/types';
 
 export default function EstoquePage() {
   const supabase = useMemo(() => createClient(), []);
   const [itens, setItens] = useState<ItemEstoque[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [disponiveis, setDisponiveis] = useState<Record<string, boolean>>({});
   const [precosEditando, setPrecosEditando] = useState<Record<string, string>>({});
     const [salvando, setSalvando] = useState(false);
@@ -25,7 +16,9 @@ export default function EstoquePage() {
 
   useEffect(() => {
     async function carregar() {
-      const { data: todosItens } = await supabase.from('itens_estoque').select('*').order('ordem');
+      const resp = await fetch('/api/admin/categorias');
+if (resp.ok) setCategorias(await resp.json());
+      const { data: todosItens } = await supabase.from('itens_estoque').select('*').eq('ativo_cadastro', true).order('ordem');
       const { data: disp } = await supabase.from('disponibilidade_dia').select('*').eq('data', hoje);
 
       setItens(todosItens || []);
@@ -70,14 +63,15 @@ export default function EstoquePage() {
     const dataFormatada = hoje.split('-').reverse().join('/');
     const linhas: string[] = [`*🍱 Cardápio de hoje — Cantina Bom Sabor*`, `_${dataFormatada}_`, ''];
 
-    ORDEM.forEach((cat) => {
+    categorias.forEach((c) => {
+  const cat = c.id;
       const semAtivacaoDiaria = cat === 'tamanho';
            const itensCategoria = (porCategoria[cat] || []).filter((item) =>
         semAtivacaoDiaria ? true : disponiveis[item.id]
       );
       if (itensCategoria.length === 0) return;
 
-      linhas.push(`*${NOMES[cat]}*`);
+      linhas.push(`*${c.nome}*`);
       itensCategoria.forEach((item) => {
         const preco = item.preco > 0 ? ` — R$ ${item.preco.toFixed(2)}` : '';
         const veg = item.vegetariano ? ' 🌱' : '';
@@ -141,22 +135,22 @@ export default function EstoquePage() {
       </div>
 
       <div className="bg-green-50 border border-green-200 rounded-2xl p-3 mb-5 text-sm text-green-800">
-        🌱 Clique no ícone de folha pra marcar como vegetariano. O campo de preço aparece só em Tamanhos,
-        Adicionais, Massas e Congelados — os demais opcionais não têm valor adicional.
+        🌱 Clique no ícone de folha pra marcar como vegetariano. O campo de preço aparece só nas categorias com preço (configuradas em Gerenciar cardápio).
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-5 text-sm text-blue-800">
         📏 Os <b>Tamanhos</b> ficam sempre disponíveis no cardápio — não precisam ser ativados dia a dia. Só o preço é editável.
       </div>
 
-      {ORDEM.map((cat) => {
+      {categorias.map((c) => {
+  const cat = c.id;
         const itensCategoria = porCategoria[cat] || [];
         if (itensCategoria.length === 0) return null;
         const semAtivacaoDiaria = cat === 'tamanho';
-        const temPreco = COM_PRECO.includes(cat);
+        const temPreco = c.tem_preco;
         return (
           <div key={cat} className="bg-white rounded-2xl shadow p-4 mb-4">
-            <h2 className="font-bold text-sm text-orange-dark mb-3 uppercase tracking-wide">{NOMES[cat]}</h2>
+            <h2 className="font-bold text-sm text-orange-dark mb-3 uppercase tracking-wide">{c.nome}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {itensCategoria.map((item) => {
                 const ativo = semAtivacaoDiaria ? true : disponiveis[item.id];
