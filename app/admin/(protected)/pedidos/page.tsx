@@ -13,8 +13,12 @@ const STATUS_COR: Record<Pedido['status'], string> = {
   pronto: 'bg-green text-white', entregue: 'bg-ink/20 text-ink/60', cancelado: 'bg-red-500 text-white',
 };
 
+// Dia no horário de Brasília (AAAA-MM-DD), independente do fuso do aparelho
+function diaBR(data: Date) {
+  return data.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
 function diaDe(dataIso: string) {
-  return new Date(dataIso).toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso local
+  return diaBR(new Date(dataIso));
 }
 function formatarDia(diaIso: string) {
   const [ano, mes, dia] = diaIso.split('-');
@@ -27,13 +31,17 @@ function totalComTaxa(p: Pedido) {
 export default function PedidosPage() {
   const supabase = useMemo(() => createClient(), []);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [diaSelecionado, setDiaSelecionado] = useState<string>('todos');
+const [diaSelecionado, setDiaSelecionado] = useState<string>('hoje');
   const [expandido, setExpandido] = useState<Record<string, boolean>>({});
   const [detalhes, setDetalhes] = useState<Record<string, any[]>>({});
   const [carregandoDetalhe, setCarregandoDetalhe] = useState<Record<string, boolean>>({});
   const [taxasEditando, setTaxasEditando] = useState<Record<string, string>>({});
 
-    const hojeStr = new Date().toLocaleDateString('sv-SE');
+const [hojeStr, setHojeStr] = useState(() => diaBR(new Date()));
+useEffect(() => {
+  const t = setInterval(() => setHojeStr(diaBR(new Date())), 60_000);
+  return () => clearInterval(t);
+}, []);
 
   useEffect(() => {
     async function carregar() {
@@ -91,32 +99,37 @@ export default function PedidosPage() {
     }
   }
 
-   const diasDisponiveis = Array.from(new Set([hojeStr, ...pedidos.map((p) => diaDe(p.created_at))])).sort((a, b) => b.localeCompare(a));
-  const pedidosFiltrados = diaSelecionado === 'todos' ? pedidos : pedidos.filter((p) => diaDe(p.created_at) === diaSelecionado);
+  const diaEfetivo = diaSelecionado === 'hoje' ? hojeStr : diaSelecionado;
+const diasAnteriores = Array.from(new Set(pedidos.map((p) => diaDe(p.created_at))))
+  .filter((d) => d !== hojeStr)
+  .sort((a, b) => b.localeCompare(a));
+const pedidosFiltrados = diaEfetivo === 'todos' ? pedidos : pedidos.filter((p) => diaDe(p.created_at) === diaEfetivo);
+
 
   // Dashboard: acompanha o filtro escolhido (um dia específico ou todos os dias)
   const pedidosValidos = pedidosFiltrados.filter((p) => p.status !== 'cancelado');
   const faturamento = pedidosValidos.reduce((s, p) => s + totalComTaxa(p), 0);
   const entregas = pedidosValidos.filter((p) => p.modo === 'entrega').length;
   const retiradas = pedidosValidos.filter((p) => p.modo === 'retirada').length;
-  const rotuloPeriodo = diaSelecionado === 'todos' ? 'no total' : diaSelecionado === hojeStr ? 'hoje' : `em ${formatarDia(diaSelecionado)}`;
-
-  return (
+const rotuloPeriodo = diaEfetivo === 'todos' ? 'no total' : diaEfetivo === hojeStr ? 'hoje' : `em ${formatarDia(diaEfetivo)}`;
+  
+return (
     <div className="max-w-4xl mx-auto">
            <h1 className="text-lg sm:text-xl font-bold text-green-dark mb-4">Pedidos</h1>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <span className="text-sm font-semibold text-ink/60">Filtrar por dia</span>
         <select
-          value={diaSelecionado}
-          onChange={(e) => setDiaSelecionado(e.target.value)}
-          className="text-sm border rounded-lg px-3 py-2 bg-white"
-        >
-          <option value="todos">Todos os dias</option>
-          {diasDisponiveis.map((d) => (
-            <option key={d} value={d}>{d === hojeStr ? `Hoje (${formatarDia(d)})` : formatarDia(d)}</option>
-          ))}
-        </select>
+  value={diaSelecionado}
+  onChange={(e) => setDiaSelecionado(e.target.value)}
+  className="text-sm border rounded-lg px-3 py-2 bg-white"
+>
+  <option value="hoje">Hoje ({formatarDia(hojeStr)})</option>
+  {diasAnteriores.map((d) => (
+    <option key={d} value={d}>{formatarDia(d)}</option>
+  ))}
+  <option value="todos">Todos os dias</option>
+</select>
       </div>
 
       {/* Dashboard: acompanha o filtro escolhido */}
@@ -139,11 +152,15 @@ export default function PedidosPage() {
         </div>
       </div>
       <p className="text-xs text-ink/40 mb-5">
-        Valores {diaSelecionado === 'todos' ? 'somados de todos os dias' : `de ${formatarDia(diaSelecionado)}`}. O faturamento inclui as taxas de entrega lançadas e não conta pedidos cancelados.
+Valores {diaEfetivo === 'todos' ? 'somados de todos os dias' : `de ${formatarDia(diaEfetivo)}`}. O faturamento inclui ...
       </p>
 
       <div className="flex flex-col gap-3">
-        {pedidosFiltrados.length === 0 && <p className="text-ink/40 text-sm">Nenhum pedido neste dia.</p>}
+{pedidosFiltrados.length === 0 && (
+  <p className="text-ink/40 text-sm">
+    Nenhum pedido {diaEfetivo === 'todos' ? 'registrado' : diaEfetivo === hojeStr ? 'hoje ainda' : 'neste dia'}.
+  </p>
+)}
         {pedidosFiltrados.map((p) => {
           const taxaEditando = taxasEditando[p.id];
           return (
