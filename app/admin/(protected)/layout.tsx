@@ -2,12 +2,19 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import LogoutButton from '@/components/LogoutButton';
+import { estadoMensalidade } from '@/lib/mensalidade'; // NOVO
+import TelaBloqueio from '@/components/TelaBloqueio'; // NOVO
+import AvisoMensalidade from '@/components/AvisoMensalidade'; // NOVO
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/admin/login');
+
+  // NOVO: bloqueio e aviso da mensalidade
+  const mensalidade = await estadoMensalidade();
+  if (mensalidade?.bloqueado) return <TelaBloqueio mensalidade={mensalidade} />;
 
   return (
     <div className="min-h-screen bg-cream">
@@ -34,11 +41,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Cardápio do dia
           </Link>
           <Link
-  href="/admin/cardapio"
-  className="bg-white/10 hover:bg-white/20 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition"
->
-  Gerenciar cardápio
-</Link>
+            href="/admin/cardapio"
+            className="bg-white/10 hover:bg-white/20 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition"
+          >
+            Gerenciar cardápio
+          </Link>
           <a
             href="https://portal.ifood.com.br/"
             target="_blank"
@@ -51,7 +58,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <LogoutButton />
         </nav>
       </header>
-      <main className="p-3 sm:p-5 print:p-0">{children}</main>
+      <main className="p-3 sm:p-5 print:p-0">
+        {mensalidade?.aviso && <AvisoMensalidade mensalidade={mensalidade} />} {/* NOVO */}
+        {children}
+      </main>
     </div>
   );
 }
