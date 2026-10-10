@@ -4,6 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { Categoria, ItemEstoque } from '@/lib/types';
 
+// Ordem igual à do cardápio online: a massa é perguntada logo após o tamanho.
+// Numeração fixa, para combinar com o modelo de pedido enviado aos clientes.
+const ORDEM_TEXTO = ['tamanho', 'massa', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra', 'bebida', 'sobremesa'];
+const DICA_TEXTO: Record<string, string> = {
+  tamanho: ' _(obrigatório)_',
+  massa: ' _(opcional)_',
+  guarnicao: ' _(até 3)_',
+  extra: ' _(opcional)_',
+  bebida: ' _(opcional)_',
+  sobremesa: ' _(opcional)_',
+};
 export default function EstoquePage() {
   const supabase = useMemo(() => createClient(), []);
   const [itens, setItens] = useState<ItemEstoque[]>([]);
@@ -59,31 +70,70 @@ if (resp.ok) setCategorias(await resp.json());
     setSalvando(false);
     setPrecosEditando((prev) => { const c = { ...prev }; delete c[item.id]; return c; });
   }
-  function gerarTextoCardapio(): string {
+    function gerarTextoCardapio(): string {
     const dataFormatada = hoje.split('-').reverse().join('/');
-    const linhas: string[] = [`*🍱 Cardápio de hoje — Cantina Bom Sabor*`, `_${dataFormatada}_`, ''];
+    const ehFeijoada = (i: ItemEstoque) => i.nome.toLowerCase().includes('feijoada');
+    const sabado =
+      new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Sao_Paulo' }) === 'Sat';
 
-    categorias.forEach((c) => {
-  const cat = c.id;
-      const semAtivacaoDiaria = cat === 'tamanho';
-           const itensCategoria = (porCategoria[cat] || []).filter((item) =>
-        semAtivacaoDiaria ? true : disponiveis[item.id]
+    // tamanhos sempre ativos; demais itens só se ligados hoje; feijoada fica fora da lista de feijões
+    const ativos = (catId: string) =>
+      (porCategoria[catId] || []).filter(
+        (item) => (catId === 'tamanho' || disponiveis[item.id]) && !(catId === 'feijao' && ehFeijoada(item))
       );
-      if (itensCategoria.length === 0) return;
+    const feijoadas = sabado
+      ? (porCategoria.feijao || []).filter((i) => disponiveis[i.id] && ehFeijoada(i))
+      : [];
 
-      linhas.push(`*${c.nome}*`);
-      itensCategoria.forEach((item) => {
-        const preco = item.preco > 0 ? ` — R$ ${item.preco.toFixed(2)}` : '';
-        const veg = item.vegetariano ? ' 🌱' : '';
-        linhas.push(`${item.emoji || '•'} ${item.nome}${preco}${veg}`);
-      });
+    const linhaItem = (item: ItemEstoque) => {
+      const preco = item.preco > 0 ? ` — R$ ${item.preco.toFixed(2).replace('.', ',')}` : '';
+      const veg = item.vegetariano ? ' 🌱' : '';
+      return `${item.emoji || '•'} ${item.nome}${preco}${veg}`;
+    };
+
+    const linhas: string[] = [
+      `*🍱 Cardápio de hoje — Cantina Bom Sabor*`,
+      `_${dataFormatada}_`,
+      '',
+      '📝 *Como pedir:* envie seu pedido seguindo a numeração abaixo, na mesma ordem (1, 2, 3…). Se não quiser algum item, é só deixar em branco ou escrever *"sem"*.',
+      '',
+    ];
+
+    // categorias do fluxo, com numeração fixa
+    ORDEM_TEXTO.forEach((id, idx) => {
+      const cat = categorias.find((c) => c.id === id);
+      if (!cat) return;
+      const itens = ativos(id);
+      linhas.push(`*${idx + 1}. ${cat.nome.toUpperCase()}*${DICA_TEXTO[id] ?? ''}`);
+      if (itens.length === 0) linhas.push('_sem opções hoje_');
+      else itens.forEach((item) => linhas.push(linhaItem(item)));
       linhas.push('');
+
+      if (id === 'tamanho' && feijoadas.length > 0) {
+        linhas.push(
+          `⭐ *Especial de sábado:* ${feijoadas.map((f) => f.nome).join(' / ')}, já com todos os acompanhamentos. Se escolher, preencha só o item 1 (tamanho) e escreva o nome da feijoada no item 4.`
+        );
+        linhas.push('');
+      }
     });
+
+    // categorias criadas pelo restaurante continuam a numeração (só se tiverem itens hoje)
+    let n = ORDEM_TEXTO.length;
+    categorias
+      .filter((c) => !ORDEM_TEXTO.includes(c.id))
+      .forEach((cat) => {
+        const itens = ativos(cat.id);
+        if (itens.length === 0) return;
+        n += 1;
+        linhas.push(`*${n}. ${cat.nome.toUpperCase()}* _(opcional)_`);
+        itens.forEach((item) => linhas.push(linhaItem(item)));
+        linhas.push('');
+      });
 
     linhas.push('📌 Pedir os itens separados em potes individuais tem acréscimo a partir de R$ 2,00 (embalagem).');
     linhas.push('🛵 Taxa de entrega varia conforme a localidade e é confirmada pelo WhatsApp. Aos domingos/feriados a entrega é terceirizada.');
     linhas.push('');
-    linhas.push('👉 Faça seu pedido pelo nosso cardápio online!');
+    linhas.push('👉 Prefere montar sozinho? Peça pelo cardápio online: https://cantina-bom-sabor.genixcatalog.app.br');
 
     return linhas.join('\n');
   }

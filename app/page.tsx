@@ -15,6 +15,11 @@ const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
+// Feijoada completa: prato pronto, já inclui todos os acompanhamentos
+const ehFeijoada = (i?: ItemEstoque | null) => !!i && i.nome.toLowerCase().includes('feijoada');
+// Feijoada completa só é servida aos sábados (horário de Brasília)
+const ehSabadoBR = () =>
+  new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Sao_Paulo' }) === 'Sat';
 const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão (na entrega)' };
 
 type Etapa =
@@ -39,6 +44,7 @@ export default function CardapioPage() {
   const [pixCopiado, setPixCopiado] = useState(false);
   const [observacoes, setObservacoes] = useState('');
   const [desejaMassa, setDesejaMassa] = useState<'sim' | 'nao' | null>(null);
+  const [escolhaPrato, setEscolhaPrato] = useState<string | null>(null);
 
   const [atual, setAtual] = useState<Partial<Record<CategoriaId, ItemEstoque | ItemEstoque[]>>>({});
   const [extraQuantidades, setExtraQuantidades] = useState<Record<string, number>>({});
@@ -80,6 +86,10 @@ export default function CardapioPage() {
       Object.keys(agrupado).forEach((cat) => {
         agrupado[cat].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       });
+            // de segunda a sexta a feijoada completa não é oferecida
+      if (!ehSabadoBR()) {
+        agrupado.feijao = (agrupado.feijao || []).filter((i) => !ehFeijoada(i));
+      }
       agrupado.tamanho = tamanhos || [];
 
       const respCats = await fetch('/api/categorias');
@@ -184,8 +194,10 @@ export default function CardapioPage() {
       .filter((e) => e.item && e.quantidade > 0);
   }
 
-  function finalizarMarmitaAtual() {
-    const tipoExtra = atual.extra as ItemEstoque | undefined;
+   function finalizarMarmitaAtual(override?: Partial<Record<string, ItemEstoque | ItemEstoque[]>>) {
+    // override: usado pela feijoada, para ignorar escolhas antigas guardadas
+    const a = override ?? atual;
+    const tipoExtra = a.extra as ItemEstoque | undefined;
     const carnesDisponiveis = itensPorCategoria.carne || [];
     const escolhasExtra: ExtraCarneEscolha[] = Object.entries(extraQuantidades)
       .map(([carneId, quantidade]) => ({
@@ -196,19 +208,20 @@ export default function CardapioPage() {
 
     const config: MarmitaConfig = {
       numero: marmitas.length + 1,
-      tamanho: atual.tamanho as ItemEstoque,
-      arroz: (atual.arroz as ItemEstoque) || null,
-      feijao: (atual.feijao as ItemEstoque) || null,
-            massas: atual.massa ? [atual.massa as ItemEstoque] : [],
-      guarnicoes: (atual.guarnicao as ItemEstoque[]) || [],
-      salada: (atual.salada as ItemEstoque) || null,
-      carne: (atual.carne as ItemEstoque) || null,
+      tamanho: a.tamanho as ItemEstoque,
+      arroz: (a.arroz as ItemEstoque) || null,
+      feijao: (a.feijao as ItemEstoque) || null,
+      massas: a.massa ? [a.massa as ItemEstoque] : [],
+      guarnicoes: (a.guarnicao as ItemEstoque[]) || [],
+      salada: (a.salada as ItemEstoque) || null,
+      carne: (a.carne as ItemEstoque) || null,
       extra: tipoExtra && tipoExtra.preco > 0 && escolhasExtra.length > 0
         ? { tipo: tipoExtra, escolhas: escolhasExtra }
         : null,
     };
     const novasMarmitas = [...marmitas, config];
     setMarmitas(novasMarmitas);
+    setEscolhaPrato(null);
 
     if (modoMarmitas === 'diferentes' && novasMarmitas.length < quantidade) {
       setAtual({});
@@ -461,7 +474,38 @@ export default function CardapioPage() {
             <Botoes onBack={() => setEtapa('quantidade')} onNext={() => setEtapa('tamanho')} disabled={!modoMarmitas} />
           </Step>
         )}
-
+        {etapa === 'escolhaPrato' && (() => {
+          const feijoadas = (itensPorCategoria.feijao || []).filter(ehFeijoada);
+          const opcaoMontar = { id: 'montar', nome: '🍱 Montar minha marmita' } as any;
+          const selecionado = escolhaPrato === 'montar' ? [opcaoMontar] : feijoadas.filter((f) => f.id === escolhaPrato);
+          return (
+            <Step titulo="Como você quer sua marmita?">
+              {modoMarmitas === 'diferentes' && quantidade > 1 && (
+                <p className="text-xs font-bold text-orange-dark mb-2">Marmita {marmitas.length + 1} de {quantidade}</p>
+              )}
+              <p className="text-xs text-ink/60 mb-3">
+                A feijoada completa já vem pronta, com todos os acompanhamentos incluídos.
+              </p>
+              <Opcoes
+                itens={[opcaoMontar, ...feijoadas]}
+                selecionado={selecionado}
+                onSelect={(i) => setEscolhaPrato(i.id)}
+              />
+              <Botoes
+                onBack={() => setEtapa('tamanho')}
+                onNext={() => {
+                  if (escolhaPrato === 'montar') {
+                    setEtapa('desejaMassa');
+                    return;
+                  }
+                  const f = feijoadas.find((x) => x.id === escolhaPrato);
+                  if (f) finalizarMarmitaAtual({ tamanho: atual.tamanho as ItemEstoque, feijao: f });
+                }}
+                disabled={!escolhaPrato}
+              />
+            </Step>
+          );
+        })()}
         {etapa === 'desejaMassa' && (
           <Step titulo="Deseja incluir massa nesta marmita?">
             {modoMarmitas === 'diferentes' && quantidade > 1 && (
@@ -476,11 +520,8 @@ export default function CardapioPage() {
               onSelect={(i) => setDesejaMassa(i.id as any)}
             />
             <Botoes
-              onBack={() => {
-                const idx = ORDEM_CATEGORIAS.indexOf('tamanho');
-                if (idx === 0) setEtapa(quantidade > 1 ? 'modoMarmitas' : 'quantidade');
-                else setEtapa(ORDEM_CATEGORIAS[idx - 1] as Etapa);
-              }}
+                           onBack={() => setEtapa((itensPorCategoria.feijao || []).some(ehFeijoada) ? 'escolhaPrato' : 'tamanho')}
+                           
               onNext={() => setEtapa(desejaMassa === 'sim' ? 'escolherMassa' : 'arroz')}
               disabled={!desejaMassa}
             />
@@ -507,7 +548,7 @@ export default function CardapioPage() {
         )}
         {ORDEM_CATEGORIAS.includes(etapa as CategoriaId) && (() => {
           const cat = etapa as CategoriaId;
-          const itens = itensPorCategoria[cat] || [];
+          const itens = (itensPorCategoria[cat] || []).filter((i) => cat !== 'feijao' || !ehFeijoada(i));
           const isMulti = cat === 'guarnicao';
           return (
             <Step titulo={NOMES_CATEGORIAS[cat]}>
@@ -535,8 +576,10 @@ export default function CardapioPage() {
                 }}
                 onSkip={PULAVEL[cat] ? () => pularEtapa(cat) : undefined}
                 onNext={() => {
-                  if (cat === 'tamanho') {
-                    setEtapa('desejaMassa');
+                                    if (cat === 'tamanho') {
+                    const temFeijoada = (itensPorCategoria.feijao || []).some(ehFeijoada);
+                    setEscolhaPrato(null);
+                    setEtapa(temFeijoada ? 'escolhaPrato' : 'desejaMassa');
                     return;
                   }
                   if (cat === 'extra') {
@@ -545,13 +588,7 @@ export default function CardapioPage() {
                     else finalizarMarmitaAtual();
                     return;
                   }
-                  if (cat === 'feijao') {
-                    const selFeijao = atual.feijao as ItemEstoque | undefined;
-                    if (selFeijao && selFeijao.nome.toLowerCase().includes('feijoada')) {
-                      finalizarMarmitaAtual();
-                      return;
-                    }
-                  }
+                  
                   setEtapa(proximaCategoria(cat));
                 }}
                 disabled={!podeAvancar(cat)}
