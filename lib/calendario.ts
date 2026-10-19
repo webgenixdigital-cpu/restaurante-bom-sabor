@@ -1,5 +1,5 @@
 // Calendário da Cantina Bom Sabor (horário de Brasília).
-// Dia "especial" = sábado, domingo ou feriado: taxa cheia e pedido só pelo site.
+// Dia "especial" = domingo ou feriado: taxa cheia e pedido só pelo site.
 
 export type InfoDia = {
   data: string;            // AAAA-MM-DD
@@ -70,5 +70,5 @@ export function infoDia(data: string = hojeBR()): InfoDia {
   const [y, m, d] = data.split('-').map(Number);
   const diaSemana = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const feriado = feriadosDoAno(y)[data] ?? null;
-  return { data, diaSemana, feriado, especial: diaSemana === 0 || diaSemana === 6 || !!feriado };
+  return { data, diaSemana, feriado, especial: diaSemana === 0 || !!feriado };
 }

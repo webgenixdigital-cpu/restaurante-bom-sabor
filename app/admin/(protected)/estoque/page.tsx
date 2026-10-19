@@ -95,7 +95,7 @@ if (resp.ok) setCategorias(await resp.json());
     const linhas: string[] = [`*🍱 Cardápio de hoje — Cantina Bom Sabor*`, `_${dataFormatada}_`, ''];
 
     if (dia.especial) {
-      linhas.push(`📲 *${dia.feriado ? `Hoje é feriado (${dia.feriado})` : 'Hoje é fim de semana'}: pedidos somente pelo site!*`);
+      linhas.push(`📲 *${dia.feriado ? `Hoje é feriado (${dia.feriado})` : 'Hoje é domingo'}: pedidos somente pelo site!*`);
       linhas.push(`👉 ${LINK}`);
       linhas.push('_Hoje não recebemos pedidos pelo WhatsApp._');
     } else {
@@ -114,7 +114,10 @@ if (resp.ok) setCategorias(await resp.json());
       linhas.push('');
 
       if (id === 'tamanho' && feijoadas.length > 0) {
-        linhas.push(`⭐ *Especial de sábado:* ${feijoadas.map((f) => f.nome).join(' / ')}, já com todos os acompanhamentos.`);
+        linhas.push(
+          `⭐ *Especial de sábado:* ${feijoadas.map((f) => f.nome).join(' / ')}, já com todos os acompanhamentos.` +
+            (dia.especial ? '' : ' Pedindo pelo WhatsApp, preencha só o item 1 (tamanho) e escreva o nome da feijoada no item 4.')
+        );
         linhas.push('');
       }
     });
@@ -136,7 +139,7 @@ if (resp.ok) setCategorias(await resp.json());
     linhas.push(
       dia.especial
         ? '🛵 Taxa de entrega conforme o bairro, calculada automaticamente no site.'
-        : '🛵 Taxa de entrega conforme o bairro. De segunda a sexta, entrega grátis no Centro e no Jardim dos Estados.'
+        : '🛵 Taxa de entrega conforme o bairro. De segunda a sábado, entrega grátis no Centro e no Jardim dos Estados.'
     );
     linhas.push('');
     linhas.push(dia.especial ? `👉 Faça seu pedido pelo site: ${LINK}` : `👉 Prefere montar sozinho? Peça pelo cardápio online: ${LINK}`);

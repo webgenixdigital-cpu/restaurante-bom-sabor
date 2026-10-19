@@ -10,11 +10,11 @@ const PERGUNTAS: { p: string; r: string }[] = [
   },
   {
     p: 'Posso pedir pelo WhatsApp?',
-    r: 'De segunda a sexta, você pode pedir por aqui ou pelo WhatsApp. Aos sábados, domingos e feriados, os pedidos são feitos somente por aqui, pelo site, e chegam direto na cozinha.',
+    r: 'De segunda a sábado, você pode pedir por aqui ou pelo WhatsApp. Aos domingos e feriados, os pedidos são feitos somente por aqui, pelo site, e chegam direto na cozinha.',
   },
   {
     p: 'Quanto custa a entrega?',
-    r: 'Depende do bairro. Ao escolher o bairro, o valor aparece logo abaixo e já entra no total do pedido. De segunda a sexta, a entrega é grátis no Centro e no Jardim dos Estados. Aos sábados, domingos e feriados, vale a tabela para todos os bairros. Se o seu bairro não estiver na lista, o restaurante confirma a taxa com você.',
+    r: 'Depende do bairro. Ao escolher o bairro, o valor aparece logo abaixo e já entra no total do pedido. De segunda a sábado, a entrega é grátis no Centro e no Jardim dos Estados. Aos domingos e feriados, vale a tabela para todos os bairros. Se o seu bairro não estiver na lista, o restaurante confirma a taxa com você.',
   },
   {
     p: 'Tem feijoada?',
@@ -26,7 +26,7 @@ const PERGUNTAS: { p: string; r: string }[] = [
   },
   {
     p: 'Tem marmitex só de massa?',
-    r: 'Temos, com valor diferenciado. Consulte pelo WhatsApp de segunda a sexta.',
+    r: 'Temos, com valor diferenciado. Consulte pelo WhatsApp de segunda a sábado.',
   },
   {
     p: 'O que significa a folhinha 🌱?',
