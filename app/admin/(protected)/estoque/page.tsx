@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { Categoria, ItemEstoque } from '@/lib/types';
+import { infoDia } from '@/lib/calendario';
 
 // Ordem igual à do cardápio online: a massa é perguntada logo após o tamanho.
 // Numeração fixa, para combinar com o modelo de pedido enviado aos clientes.
@@ -70,18 +71,18 @@ if (resp.ok) setCategorias(await resp.json());
     setSalvando(false);
     setPrecosEditando((prev) => { const c = { ...prev }; delete c[item.id]; return c; });
   }
-    function gerarTextoCardapio(): string {
+      function gerarTextoCardapio(): string {
     const dataFormatada = hoje.split('-').reverse().join('/');
     const ehFeijoada = (i: ItemEstoque) => i.nome.toLowerCase().includes('feijoada');
-    const sabado =
-      new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Sao_Paulo' }) === 'Sat';
+    const dia = infoDia(); // sábado, domingo e feriado = dia especial
+    const LINK = 'https://cantina-bom-sabor.genixcatalog.app.br';
 
     // tamanhos sempre ativos; demais itens só se ligados hoje; feijoada fica fora da lista de feijões
     const ativos = (catId: string) =>
       (porCategoria[catId] || []).filter(
         (item) => (catId === 'tamanho' || disponiveis[item.id]) && !(catId === 'feijao' && ehFeijoada(item))
       );
-    const feijoadas = sabado
+    const feijoadas = dia.diaSemana === 6
       ? (porCategoria.feijao || []).filter((i) => disponiveis[i.id] && ehFeijoada(i))
       : [];
 
@@ -91,13 +92,16 @@ if (resp.ok) setCategorias(await resp.json());
       return `${item.emoji || '•'} ${item.nome}${preco}${veg}`;
     };
 
-    const linhas: string[] = [
-      `*🍱 Cardápio de hoje — Cantina Bom Sabor*`,
-      `_${dataFormatada}_`,
-      '',
-      '📝 *Como pedir:* envie seu pedido seguindo a numeração abaixo, na mesma ordem (1, 2, 3…). Se não quiser algum item, é só deixar em branco ou escrever *"sem"*.',
-      '',
-    ];
+    const linhas: string[] = [`*🍱 Cardápio de hoje — Cantina Bom Sabor*`, `_${dataFormatada}_`, ''];
+
+    if (dia.especial) {
+      linhas.push(`📲 *${dia.feriado ? `Hoje é feriado (${dia.feriado})` : 'Hoje é fim de semana'}: pedidos somente pelo site!*`);
+      linhas.push(`👉 ${LINK}`);
+      linhas.push('_Hoje não recebemos pedidos pelo WhatsApp._');
+    } else {
+      linhas.push('📝 *Como pedir:* pelo site ou aqui pelo WhatsApp, seguindo a numeração abaixo, na mesma ordem (1, 2, 3…). Se não quiser algum item, é só deixar em branco ou escrever *"sem"*.');
+    }
+    linhas.push('');
 
     // categorias do fluxo, com numeração fixa
     ORDEM_TEXTO.forEach((id, idx) => {
@@ -110,9 +114,7 @@ if (resp.ok) setCategorias(await resp.json());
       linhas.push('');
 
       if (id === 'tamanho' && feijoadas.length > 0) {
-        linhas.push(
-          `⭐ *Especial de sábado:* ${feijoadas.map((f) => f.nome).join(' / ')}, já com todos os acompanhamentos. Se escolher, preencha só o item 1 (tamanho) e escreva o nome da feijoada no item 4.`
-        );
+        linhas.push(`⭐ *Especial de sábado:* ${feijoadas.map((f) => f.nome).join(' / ')}, já com todos os acompanhamentos.`);
         linhas.push('');
       }
     });
@@ -131,9 +133,13 @@ if (resp.ok) setCategorias(await resp.json());
       });
 
     linhas.push('📌 Pedir os itens separados em potes individuais tem acréscimo a partir de R$ 2,00 (embalagem).');
-    linhas.push('🛵 Taxa de entrega varia conforme a localidade e é confirmada pelo WhatsApp. Aos domingos/feriados a entrega é terceirizada.');
+    linhas.push(
+      dia.especial
+        ? '🛵 Taxa de entrega conforme o bairro, calculada automaticamente no site.'
+        : '🛵 Taxa de entrega conforme o bairro. De segunda a sexta, entrega grátis no Centro e no Jardim dos Estados.'
+    );
     linhas.push('');
-    linhas.push('👉 Prefere montar sozinho? Peça pelo cardápio online: https://cantina-bom-sabor.genixcatalog.app.br');
+    linhas.push(dia.especial ? `👉 Faça seu pedido pelo site: ${LINK}` : `👉 Prefere montar sozinho? Peça pelo cardápio online: ${LINK}`);
 
     return linhas.join('\n');
   }

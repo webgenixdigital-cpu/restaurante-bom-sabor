@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import type { Categoria, CategoriaId, ItemEstoque, MarmitaConfig, ExtraCarneEscolha, ItemAvulsoEscolha } from '@/lib/types';
 import Capa from '@/components/Capa';
 import RodapeGenix from '@/components/RodapeGenix';
+import FaqPedido from '@/components/FaqPedido';
+import { infoDia } from '@/lib/calendario';
+import { taxaDoBairro, type Bairro } from '@/lib/entrega';
 
 
 const ORDEM_CATEGORIAS: CategoriaId[] = ['tamanho', 'arroz', 'feijao', 'guarnicao', 'salada', 'carne', 'extra'];
@@ -15,12 +18,33 @@ const NOMES_CATEGORIAS: Record<CategoriaId, string> = {
 };
 const PULAVEL: Partial<Record<CategoriaId, boolean>> = { arroz: true, feijao: true, salada: true, carne: true };
 const QTD_GUARNICOES = 3;
+const CHAVE_CLIENTE = 'bomsabor:cliente'; // dados lembrados no aparelho do cliente
 // Feijoada completa: prato pronto, já inclui todos os acompanhamentos
 const ehFeijoada = (i?: ItemEstoque | null) => !!i && i.nome.toLowerCase().includes('feijoada');
 // Feijoada completa só é servida aos sábados (horário de Brasília)
 const ehSabadoBR = () =>
   new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Sao_Paulo' }) === 'Sat';
 const PAGAMENTO_LABEL: Record<string, string> = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão (na entrega)' };
+
+const reais = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+
+// Telefone no formato (35) 99999-9999; aceita o +55 do preenchimento automático do celular
+function formatarTelefone(v: string) {
+  let d = v.replace(/\D/g, '');
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+// Rótulo da taxa de entrega de um bairro, para hoje
+function rotuloTaxa(b: Bairro) {
+  const t = taxaDoBairro(b);
+  if (t === 0) return 'Grátis hoje';
+  return b.a_partir_de ? `a partir de ${reais(t)}` : reais(t);
+}
 
 type Etapa =
   | 'nome' | 'tipoPedido' | 'modo' | 'endereco' | 'quantidade' | 'modoMarmitas'
@@ -38,11 +62,18 @@ export default function CardapioPage() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [bairros, setBairros] = useState<Bairro[]>([]);
+  const [bairroSel, setBairroSel] = useState<Bairro | null>(null);
+  const [bairroForaLista, setBairroForaLista] = useState(false);
+  const [bairroIdSalvo, setBairroIdSalvo] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState(1);
   const [modoMarmitas, setModoMarmitas] = useState<'igual' | 'diferentes' | null>(null);
   const [pagamento, setPagamento] = useState<string | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [observacoes, setObservacoes] = useState('');
+    const [lembrar, setLembrar] = useState(true);
+  const [dadosLembrados, setDadosLembrados] = useState(false);
   const [desejaMassa, setDesejaMassa] = useState<'sim' | 'nao' | null>(null);
   const [escolhaPrato, setEscolhaPrato] = useState<string | null>(null);
 
@@ -57,8 +88,57 @@ export default function CardapioPage() {
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
 
   const endereco = `${rua.trim()}, ${numero.trim()} - ${bairro.trim()}`;
-  const enderecoValido = rua.trim().length >= 3 && numero.trim().length >= 1 && bairro.trim().length >= 2;
+  const enderecoValido =
+    rua.trim().length >= 3 &&
+    numero.trim().length >= 1 &&
+    (!!bairroSel || (bairroForaLista && bairro.trim().length >= 2));
 
+  const telefoneDigitos = telefone.replace(/\D/g, '');
+  const telefoneValido = telefoneDigitos.length >= 10 && telefoneDigitos.length <= 11;
+
+  // Sábado, domingo ou feriado: taxa cheia e pedido só pelo site (sem WhatsApp)
+  const dia = useMemo(() => infoDia(), []);
+
+  // null = bairro fora da tabela (taxa confirmada pelo restaurante)
+  const taxaEntrega: number | null =
+    modo !== 'entrega' ? 0 : bairroSel ? taxaDoBairro(bairroSel) : null;
+
+    // preenche com os dados lembrados neste aparelho, se houver
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(CHAVE_CLIENTE);
+      if (!salvo) return;
+      const d = JSON.parse(salvo);
+      if (d.nome) setNome(d.nome);
+      if (d.telefone) setTelefone(formatarTelefone(d.telefone));
+      if (d.rua) setRua(d.rua);
+      if (d.numero) setNumero(d.numero);
+      if (d.bairro) setBairro(d.bairro);
+      if (d.bairro_id) setBairroIdSalvo(d.bairro_id);
+      else if (d.bairro) setBairroForaLista(true);
+      setDadosLembrados(true);
+    } catch {
+      // navegador sem acesso ao armazenamento: segue sem preencher
+    }
+  }, []);
+
+  function limparDadosLembrados() {
+    try { localStorage.removeItem(CHAVE_CLIENTE); } catch {}
+    setNome(''); setTelefone(''); setRua(''); setNumero(''); setBairro('');
+    setBairroSel(null); setBairroForaLista(false); setBairroIdSalvo(null);
+    setDadosLembrados(false);
+  }
+
+  // quando a lista de bairros chega, reconhece o bairro lembrado no aparelho
+  useEffect(() => {
+    if (!bairroIdSalvo || bairros.length === 0) return;
+    const b = bairros.find((x) => x.id === bairroIdSalvo);
+    if (b) {
+      setBairroSel(b);
+      setBairro(b.nome);
+      setBairroForaLista(false);
+    }
+  }, [bairros, bairroIdSalvo]);
     useEffect(() => {
     async function carregar() {
       const hoje = new Date().toISOString().slice(0, 10);
@@ -95,6 +175,13 @@ export default function CardapioPage() {
       const respCats = await fetch('/api/categorias');
       const cats: Categoria[] = respCats.ok ? await respCats.json() : [];
       setCategoriasExtras(cats.filter((c) => c.contexto === 'avulso' && c.id !== 'massa'));
+
+      const { data: listaBairros } = await supabase
+        .from('bairros')
+        .select('id, nome, tipo, taxa, a_partir_de, gratis_dias_uteis')
+        .eq('ativo', true)
+        .order('nome');
+      setBairros((listaBairros || []).map((b: any) => ({ ...b, taxa: Number(b.taxa) })));
 
       setItensPorCategoria(agrupado);
       setCarregando(false);
@@ -319,7 +406,10 @@ export default function CardapioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome_cliente: nome,
+          telefone: telefoneDigitos,
           modo,
+          bairro_id: modo === 'entrega' && bairroSel ? bairroSel.id : null,
+          taxa_entrega: modo === 'entrega' ? taxaEntrega : null,
           endereco: modo === 'entrega' ? endereco : null,
           forma_pagamento: PAGAMENTO_LABEL[pagamento || ''] || pagamento,
           total,
@@ -331,6 +421,25 @@ export default function CardapioPage() {
       const data = await resp.json();
       if (data.codigo) {
         setCodigoPedido(data.codigo);
+                // lembra (ou esquece) os dados neste aparelho
+        try {
+          if (lembrar) {
+            const anterior = JSON.parse(localStorage.getItem(CHAVE_CLIENTE) || '{}');
+            localStorage.setItem(CHAVE_CLIENTE, JSON.stringify({
+              ...anterior,
+              nome: nome.trim(),
+              telefone: telefoneDigitos,
+              ...(modo === 'entrega'
+                ? { rua: rua.trim(), numero: numero.trim(), bairro: bairro.trim(), bairro_id: bairroSel?.id ?? null }
+                : {}),
+            }));
+          } else {
+            localStorage.removeItem(CHAVE_CLIENTE);
+          }
+        } catch {}
+        // Sábado, domingo e feriado: pedido só pelo site, sem abrir o WhatsApp
+        if (dia.especial) return;
+
         const numeroWhats = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
         let itensTxt = '';
@@ -348,16 +457,21 @@ export default function CardapioPage() {
           : '';
 
         const blocoEntrega = modo === 'entrega'
-          ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n_Taxa de entrega a confirmar._`
+          ? `*Tipo:* 🛵 Entrega\n*Rua:* ${rua.trim()}\n*Número:* ${numero.trim()}\n*Bairro:* ${bairro.trim()}\n` +
+            (taxaEntrega === null
+              ? `_Taxa de entrega a confirmar (bairro fora da tabela)._`
+              : `*Taxa de entrega:* ${taxaEntrega === 0 ? 'grátis' : reais(taxaEntrega)}`)
           : `*Tipo:* 🏠 Retirada no restaurante`;
 
         const texto = encodeURIComponent(
           `*Pedido #${data.codigo} — Cantina Bom Sabor* 🍱\n\n` +
           `*Cliente:* ${nome.trim()}\n` +
+          `*Telefone:* ${telefone}\n` +
           `${blocoEntrega}\n` +
           `*Pagamento:* ${PAGAMENTO_LABEL[pagamento || ''] || pagamento}\n` +
           (observacoes.trim() ? `*Observações:* ${observacoes.trim()}\n` : '') +
           `\n${itensTxt}${extrasTxt}\n\n` +
+          `*Total:* ${reais(total + (taxaEntrega ?? 0))}${taxaEntrega === null ? ' + taxa de entrega' : ''}\n\n` +
           `Já enviado pelo site — só confirmando por aqui!`
         );
         window.open(`https://wa.me/${numeroWhats}?text=${texto}`, '_blank');
@@ -374,7 +488,15 @@ export default function CardapioPage() {
       <div className="max-w-md mx-auto mt-20 p-8 text-center bg-white rounded-2xl shadow">
         <div className="text-4xl mb-3">✅</div>
         <h1 className="text-2xl font-bold text-green-dark mb-2">Pedido #{codigoPedido} recebido!</h1>
-        <p className="text-ink/60">Acompanhe pelo WhatsApp — já avisamos a cozinha.</p>
+        {dia.especial ? (
+          <p className="text-ink/60">
+            Seu pedido já chegou na cozinha pelo sistema. Hoje os pedidos são atendidos somente pelo site,
+            não é preciso enviar mensagem. Se precisarmos confirmar algo, ligamos para {telefone}.
+          </p>
+        ) : (
+          <p className="text-ink/60">Acompanhe pelo WhatsApp — já avisamos a cozinha.</p>
+        )}
+        <FaqPedido />
       </div>
     );
   }
@@ -389,20 +511,38 @@ export default function CardapioPage() {
 
         {etapa === 'nome' && (
           <Step titulo="Qual é o seu nome?">
-            <div className="bg-cream-2 rounded-xl p-3 mb-4 text-xs text-ink/70 leading-relaxed">
-              💡 <b>Como funciona:</b> monte sua marmita passo a passo — tamanho, arroz, feijão,
-              guarnições, salada e carne. Se não quiser escolher algo em alguma etapa, é só usar
-              "Pular etapa". No final você vê o resumo completo antes de confirmar.
-              <br /><br />
-              🌱 Itens com essa folhinha são opções vegetarianas (sem carne).
-            </div>
-            <div className="bg-orange/10 border border-orange/20 rounded-xl p-3 mb-4 text-xs text-ink/70 leading-relaxed">
-              📌 <b>Bom saber:</b> pedir os itens da marmita separados em potes individuais tem
-              acréscimo a partir de R$ 2,00 (valor da embalagem). Temos também marmitex só de
-              massa, com valor diferenciado — consulte pelo WhatsApp.
-            </div>
-            <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
-            <Botoes onNext={() => setEtapa('modo')} disabled={nome.trim().length < 2} />
+            <input
+              className="input"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Nome completo"
+              name="name"
+              autoComplete="name"
+            />
+            <input
+              className="input mt-2"
+              type="tel"
+              inputMode="tel"
+              name="tel"
+              autoComplete="tel"
+              value={telefone}
+              onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+              placeholder="Telefone / WhatsApp com DDD"
+            />
+            {telefone.length > 0 && !telefoneValido && (
+              <p className="text-xs text-red-600 mt-1">Informe o telefone com DDD, ex.: (35) 99999-9999</p>
+            )}
+                        <label className="flex items-center gap-2 text-xs text-ink/60 mt-3">
+              <input type="checkbox" checked={lembrar} onChange={(e) => setLembrar(e.target.checked)} />
+              Lembrar meus dados neste aparelho
+            </label>
+
+            {dadosLembrados && (
+              <button type="button" onClick={limparDadosLembrados} className="text-xs text-ink/40 underline mt-1">
+                Não é você? Limpar dados
+              </button>
+            )}
+            <Botoes onNext={() => setEtapa('modo')} disabled={nome.trim().length < 2 || !telefoneValido} />
           </Step>
         )}
 
@@ -434,13 +574,39 @@ export default function CardapioPage() {
                   placeholder="Número"
                   inputMode="numeric"
                 />
-                <input className="input flex-1" value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" />
+                <div className="flex-1">
+                  <CampoBairro
+                    bairros={bairros}
+                    texto={bairro}
+                    selecionado={bairroSel}
+                    onTexto={(v) => { setBairro(v); setBairroSel(null); }}
+                    onSelecionar={(b) => { setBairroSel(b); setBairro(b.nome); setBairroForaLista(false); }}
+                    onForaDaLista={() => { setBairroForaLista(true); setBairroSel(null); }}
+                  />
+                </div>
               </div>
             </div>
-            <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mt-3">
-              🛵 A taxa de entrega varia conforme a localidade e será somada ao total, confirmada pelo WhatsApp.
-              Aos domingos e feriados a entrega é terceirizada e o valor pode ser diferente — também confirmado por lá.
-            </p>
+            {bairroSel && (
+              <div className="text-sm bg-cream-2 rounded-lg p-3 mt-3">
+                🛵 <b>Taxa de entrega:</b>{' '}
+                {taxaEntrega === 0 ? (
+                  <span className="text-green-dark font-bold">grátis hoje</span>
+                ) : (
+                  <span className="text-green-dark font-bold">{rotuloTaxa(bairroSel)}</span>
+                )}
+                {bairroSel.a_partir_de && taxaEntrega !== 0 && (
+                  <span className="block text-xs text-ink/50 mt-1">Valor mínimo; o restaurante confirma o valor final.</span>
+                )}
+              </div>
+            )}
+            {!bairroSel && bairroForaLista && (
+              <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mt-3">
+                📍 Bairro fora da tabela: a taxa de entrega será confirmada pelo restaurante.
+              </p>
+            )}
+            {!bairroSel && !bairroForaLista && bairro.trim().length >= 2 && (
+              <p className="text-xs text-orange-dark mt-2">Escolha o bairro na lista para ver a taxa de entrega.</p>
+            )}
             <Botoes
               onBack={() => setEtapa('modo')}
               onNext={() => setEtapa('quantidade')}
@@ -483,9 +649,6 @@ export default function CardapioPage() {
               {modoMarmitas === 'diferentes' && quantidade > 1 && (
                 <p className="text-xs font-bold text-orange-dark mb-2">Marmita {marmitas.length + 1} de {quantidade}</p>
               )}
-              <p className="text-xs text-ink/60 mb-3">
-                A feijoada completa já vem pronta, com todos os acompanhamentos incluídos.
-              </p>
               <Opcoes
                 itens={[opcaoMontar, ...feijoadas]}
                 selecionado={selecionado}
@@ -511,9 +674,6 @@ export default function CardapioPage() {
             {modoMarmitas === 'diferentes' && quantidade > 1 && (
               <p className="text-xs font-bold text-orange-dark mb-2">Marmita {marmitas.length + 1} de {quantidade}</p>
             )}
-            <p className="text-xs text-ink/60 mb-3">
-              Escolhendo massa: 1 tipo reduz o limite de guarnições pra 2; 2 tipos ou mais bloqueiam guarnições nesta marmita.
-            </p>
             <Opcoes
               itens={[{ id: 'sim', nome: '🍝 Sim, quero massa' } as any, { id: 'nao', nome: '➡️ Não, seguir sem massa' } as any]}
               selecionado={desejaMassa ? [{ id: desejaMassa } as any] : []}
@@ -637,7 +797,6 @@ export default function CardapioPage() {
 
         {etapa === 'bebidasSobremesas' && (
           <Step titulo="Quer adicionar algo mais?">
-            <p className="text-xs text-ink/60 mb-3">Opcional — só some ao total se você escolher algo.</p>
             {categoriasExtras.map((c) => {
   const itens = itensPorCategoria[c.id] || [];
   if (itens.length === 0) return null;
@@ -713,6 +872,7 @@ export default function CardapioPage() {
           <Step titulo="Resumo do pedido">
             <div className="text-sm space-y-1 mb-4">
               <SummaryLine k="Nome" v={nome} />
+              <SummaryLine k="Telefone" v={telefone} />
               <SummaryLine k="Tipo" v={modo === 'entrega' ? 'Entrega' : 'Retirada no restaurante'} />
               {modo === 'entrega' && <SummaryLine k="Rua" v={rua} />}
               {modo === 'entrega' && <SummaryLine k="Número" v={numero} />}
@@ -759,13 +919,27 @@ export default function CardapioPage() {
                 className="input resize-none"
               />
             </div>
+            {modo === 'entrega' && (
+              <div className="text-sm space-y-1 mb-2">
+                <SummaryLine k="Subtotal" v={reais(total)} />
+                <SummaryLine
+                  k="Taxa de entrega"
+                  v={taxaEntrega === null ? 'a confirmar' : taxaEntrega === 0 ? 'Grátis' : reais(taxaEntrega)}
+                />
+              </div>
+            )}
             <div className="flex justify-between items-center border-t-2 border-ink pt-3 mb-4">
               <span className="font-bold">Total</span>
-              <span className="text-2xl font-extrabold text-green-dark">R$ {total.toFixed(2)}</span>
+              <span className="text-2xl font-extrabold text-green-dark">{reais(total + (taxaEntrega ?? 0))}</span>
             </div>
-            {modo === 'entrega' && (
+            {modo === 'entrega' && taxaEntrega === null && (
               <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mb-4">
-                🛵 Este total ainda não inclui a taxa de entrega — ela varia conforme a localidade e será confirmada pelo WhatsApp antes da preparação.
+                📍 Seu bairro não está na tabela: a taxa de entrega será confirmada pelo restaurante e somada a este total.
+              </p>
+            )}
+            {modo === 'entrega' && bairroSel?.a_partir_de && taxaEntrega !== 0 && (
+              <p className="text-xs text-ink/60 bg-cream-2 rounded-lg p-3 mb-4">
+                🛵 A taxa do seu bairro é um valor mínimo; o restaurante confirma o valor final.
               </p>
             )}
             <button disabled={enviando} onClick={enviarPedido} className="w-full bg-green text-white font-bold py-3 rounded-xl disabled:opacity-50">
@@ -777,7 +951,9 @@ export default function CardapioPage() {
       </div>
 
       <RodapeGenix />
+      <div className="h-16" />
       </main>
+      <FaqPedido />
     </>
   );
 }
@@ -845,6 +1021,85 @@ function SummaryLine({ k, v }: { k: string; v: string }) {
     <div className="flex justify-between border-b border-dashed border-ink/10 py-1.5">
       <span className="text-ink/60">{k}</span>
       <span className="font-bold">{v}</span>
+    </div>
+  );
+}
+
+// ---------- Campo de bairro com sugestões da tabela ----------
+const TIPO_LABEL: Record<string, string> = { faculdade: 'Faculdade', empresa: 'Empresa', hospital: 'Hospital', hotel: 'Hotel' };
+const ABREVIACOES: Record<string, string> = {
+  jd: 'jardim', res: 'residencial', pq: 'parque', chac: 'chacara', vl: 'vila', sta: 'santa', sto: 'santo',
+};
+
+function normalizar(t: string) {
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
+}
+
+function buscarBairros(lista: Bairro[], texto: string): Bairro[] {
+  const tokens = normalizar(texto).split(/\s+/).filter(Boolean).map((t) => ABREVIACOES[t] ?? t);
+  if (tokens.length === 0) return [];
+  return lista
+    .filter((b) => {
+      const alvo = normalizar(`${b.nome} ${TIPO_LABEL[b.tipo] ?? ''}`);
+      return tokens.every((t) => alvo.includes(t));
+    })
+    .slice(0, 8);
+}
+
+function CampoBairro({
+  bairros, texto, selecionado, onTexto, onSelecionar, onForaDaLista,
+}: {
+  bairros: Bairro[];
+  texto: string;
+  selecionado: Bairro | null;
+  onTexto: (v: string) => void;
+  onSelecionar: (b: Bairro) => void;
+  onForaDaLista: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const sugestoes = buscarBairros(bairros, texto);
+
+  return (
+    <div className="relative">
+      <input
+        className="input w-full"
+        value={texto}
+        placeholder="Bairro (comece a digitar)"
+        autoComplete="off"
+        onChange={(e) => { onTexto(e.target.value); setAberto(true); }}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+      />
+      {aberto && !selecionado && texto.trim().length >= 2 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-ink/10 max-h-64 overflow-auto">
+          {sugestoes.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onSelecionar(b); setAberto(false); }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-cream flex justify-between gap-2"
+            >
+              <span>
+                {b.nome}
+                {TIPO_LABEL[b.tipo] && <span className="text-ink/40"> · {TIPO_LABEL[b.tipo]}</span>}
+              </span>
+              <span className="text-green-dark font-bold whitespace-nowrap">{rotuloTaxa(b)}</span>
+            </button>
+          ))}
+          {sugestoes.length === 0 && (
+            <p className="px-3 py-2 text-xs text-ink/50">Nenhum bairro encontrado com esse nome.</p>
+          )}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onForaDaLista(); setAberto(false); }}
+            className="w-full text-left px-3 py-2 text-xs text-ink/50 underline border-t border-ink/5"
+          >
+            Meu bairro não está na lista
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { taxaDoBairro, type Bairro } from '@/lib/entrega';
 import type { NovoPedidoPayload } from '@/lib/types';
 
 export async function POST(req: Request) {
@@ -8,9 +9,30 @@ export async function POST(req: Request) {
 
   const temMarmitas = body.marmitas?.length > 0;
   const temAvulsos = (body.itensAvulsos?.length || 0) > 0;
+  const telefone = String(body.telefone || '').replace(/\D/g, '');
 
   if (!body.nome_cliente || !body.modo || (!temMarmitas && !temAvulsos)) {
     return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
+  }
+  if (telefone.length < 10 || telefone.length > 11) {
+    return NextResponse.json({ error: 'Telefone inválido' }, { status: 400 });
+  }
+
+  // Taxa de entrega: sempre recalculada aqui, pela tabela de bairros e pela data de hoje.
+  // O valor enviado pelo navegador é ignorado, para ninguém conseguir alterá-lo.
+  let bairroId: string | null = null;
+  let taxaEntrega: number | null = null; // null = bairro fora da tabela (restaurante define)
+  if (body.modo === 'entrega' && body.bairro_id) {
+    const { data: b } = await supabase
+      .from('bairros')
+      .select('id, nome, tipo, taxa, a_partir_de, gratis_dias_uteis')
+      .eq('id', body.bairro_id)
+      .eq('ativo', true)
+      .single();
+    if (b) {
+      bairroId = b.id;
+      taxaEntrega = taxaDoBairro({ ...b, taxa: Number(b.taxa) } as Bairro);
+    }
   }
 
   // 1. cria o pedido
@@ -18,9 +40,12 @@ export async function POST(req: Request) {
     .from('pedidos')
     .insert({
       nome_cliente: body.nome_cliente,
+      telefone,
       modo: body.modo,
       endereco: body.endereco || null,
-            forma_pagamento: body.forma_pagamento,
+      bairro_id: bairroId,
+      taxa_entrega: body.modo === 'entrega' ? taxaEntrega : null,
+      forma_pagamento: body.forma_pagamento,
       total: body.total,
       observacoes: body.observacoes || null,
       origem: 'site',
@@ -51,7 +76,7 @@ export async function POST(req: Request) {
 
     if (erroMarmita || !marmitaSalva) continue;
 
-        if (marmita.guarnicoes?.length) {
+    if (marmita.guarnicoes?.length) {
       await supabase.from('pedido_marmita_guarnicoes').insert(
         marmita.guarnicoes.map((g) => ({ pedido_marmita_id: marmitaSalva.id, item_id: g.id }))
       );
@@ -74,7 +99,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 2b. cria os itens avulsos (massas/congelados), se houver
+  // 2b. cria os itens avulsos (bebidas, sobremesas e demais adicionais), se houver
   if (temAvulsos) {
     await supabase.from('pedido_itens_avulsos').insert(
       body.itensAvulsos!.map((e) => ({
@@ -85,5 +110,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ codigo: pedido.codigo, id: pedido.id });
+  return NextResponse.json({ codigo: pedido.codigo, id: pedido.id, taxa_entrega: taxaEntrega });
 }

@@ -27,6 +27,12 @@ function formatarDia(diaIso: string) {
 function totalComTaxa(p: Pedido) {
   return Number(p.total) + (p.modo === 'entrega' ? Number(p.taxa_entrega || 0) : 0);
 }
+function formatarTelefone(t: string) {
+  const d = t.replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return t;
+}
 
 export default function PedidosPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -173,6 +179,20 @@ Valores {diaEfetivo === 'todos' ? 'somados de todos os dias' : `de ${formatarDia
                     {p.origem === 'ifood' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">iFood</span>}
                   </div>
                   <div className="font-semibold truncate">{p.nome_cliente}</div>
+                                    {p.telefone && (
+                    <div className="text-sm text-ink/60 flex items-center gap-2 flex-wrap">
+                      📞{' '}
+                      <a href={`tel:${p.telefone}`} className="underline">{formatarTelefone(p.telefone)}</a>
+                      <a
+                        href={`https://wa.me/55${p.telefone}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold text-[#128C4A] underline"
+                      >
+                        WhatsApp
+                      </a>
+                    </div>
+                  )}
                   <div className="text-sm text-ink/50">
                     {p.modo === 'entrega' ? `Entrega — ${p.endereco}` : 'Retirada no restaurante'} · {p.forma_pagamento} · R$ {totalComTaxa(p).toFixed(2)}
                   </div>

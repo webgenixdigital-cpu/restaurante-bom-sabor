@@ -3,6 +3,13 @@
 import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
+function formatarTelefone(t: string) {
+  const d = String(t).replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return t;
+}
+
 export default function ImprimirClient({
   pedido, marmitas, itensAvulsos,
 }: { pedido: any; marmitas: any[]; itensAvulsos: any[] }) {
@@ -28,6 +35,7 @@ export default function ImprimirClient({
       <div className="border-t-2 border-black my-2" />
 
       <div>Cliente: {pedido.nome_cliente}</div>
+            {pedido.telefone && <div>Tel: {formatarTelefone(pedido.telefone)}</div>}
       <div>{isEntrega ? `Entrega: ${pedido.endereco}` : 'RETIRADA NO LOCAL'}</div>
             <div>Pagamento: {pedido.forma_pagamento}</div>
       {pedido.observacoes && <div>Obs: {pedido.observacoes}</div>}
@@ -74,7 +82,7 @@ export default function ImprimirClient({
           </div>
           <div className="flex justify-between">
             <span>Taxa de entrega</span>
-            <span>{taxaDefinida ? `R$ ${taxa.toFixed(2)}` : 'R$ ________'}</span>
+                        <span>{taxaDefinida ? (taxa === 0 ? 'GRÁTIS' : `R$ ${taxa.toFixed(2)}`) : 'R$ ________'}</span>
           </div>
           <div className="flex justify-between font-extrabold text-lg mt-1">
             <span>TOTAL</span>

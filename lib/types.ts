@@ -64,6 +64,9 @@ export interface ItemAvulsoEscolha {
 
 export interface NovoPedidoPayload {
   nome_cliente: string;
+    telefone?: string;
+  bairro_id?: string | null;
+  taxa_entrega?: number | null;
   modo: 'retirada' | 'entrega';
   endereco?: string;
   forma_pagamento: string;
@@ -86,5 +89,7 @@ export interface Pedido {
   observacoes: string | null;
   impresso: boolean;
   taxa_entrega: number | null;
+    telefone: string | null;
+  bairro_id: string | null;
   created_at: string;
 }
