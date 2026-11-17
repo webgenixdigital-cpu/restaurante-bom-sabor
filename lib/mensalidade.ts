@@ -2,6 +2,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verificarEMarcarPago } from '@/lib/mensalidade-pagamento';
 
 export const VALOR_MENSALIDADE = 136.9;
+// R$ 136,90 até dez/2026; R$ 154,70 a partir de jan/2027
+export function valorDaCompetencia(competencia: string): number {
+  return competencia >= '2027-01' ? 154.7 : 136.9;
+}
 const DIA_VENCIMENTO = 25;
 const DIAS_AVISO = 5;
 
@@ -41,21 +45,21 @@ export async function estadoMensalidade(): Promise<EstadoMensalidade | null> {
     await supabase
       .from('mensalidades')
       .upsert(
-        { competencia, vencimento, valor: VALOR_MENSALIDADE },
+        { competencia, vencimento, valor: valorDaCompetencia(competencia) },
         { onConflict: 'competencia', ignoreDuplicates: true }
       );
 
     const { data, error } = await supabase
       .from('mensalidades')
-      .select('id, status, competencia, vencimento, valor, pagbank_order_id')
+      .select('id, status, competencia, vencimento, valor, asaas_payment_id')
       .eq('status', 'pendente')
       .order('vencimento');
     if (error) throw error;
 
     let pendentes = data || [];
 
-    // Se já existe cobrança gerada, confere no PagBank se foi paga (o webhook é só reforço)
-    for (const m of pendentes.filter((x) => x.pagbank_order_id)) {
+    // Se já existe cobrança gerada, confere no Asaas se foi paga (o webhook é só reforço)
+    for (const m of pendentes.filter((x) => x.asaas_payment_id)) {
       let pago = false;
       try {
         pago = await verificarEMarcarPago(m);
@@ -66,7 +70,7 @@ export async function estadoMensalidade(): Promise<EstadoMensalidade | null> {
     }
 
     // qualquer mensalidade pendente já vencida bloqueia
-    const vencida = pendentes.find((m) => m.vencimento <= hoje);
+    const vencida = pendentes.find((m) => m.vencimento < hoje);
     if (vencida) {
       return {
         bloqueado: true, aviso: false, diasRestantes: 0,
